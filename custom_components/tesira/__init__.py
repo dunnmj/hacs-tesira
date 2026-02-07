@@ -31,7 +31,7 @@ CONFIG_SCHEMA = vol.Schema(
                         vol.Required(CONF_USERNAME): cv.string,
                         vol.Required(CONF_PASSWORD): cv.string,
                         vol.Required(CONF_NAME): cv.string,
-                        vol.Required(CONF_SOURCE_SELECTORS): vol.All(
+                        vol.Optional(CONF_SOURCE_SELECTORS): vol.All(
                             cv.ensure_list,
                             [cv.string],
                         ),
