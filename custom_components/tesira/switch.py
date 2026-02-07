@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-from . import get_tesira
+from . import get_name_from_instance_id, get_tesira
 from .tesira import CommandFailedException, Tesira
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ PLATFORM_SCHEMA = SWITCH_PLATFORM_SCHEMA.extend(
 async def async_setup_platform(
     hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
-    config=discovery_info["switch"][0]
+    config = discovery_info["switch"][0]
     _LOGGER.debug("Switch: %s", config)
     if config == {}:
         return
@@ -64,16 +64,6 @@ async def async_setup_platform(
 
 
 class TesiraMute(SwitchEntity):
-    @staticmethod
-    def name_from_instance_id(instance_id):
-        split_id = instance_id.split("- ", 1)
-        if len(split_id) >= 2:
-            return split_id[1]
-        split_id = instance_id.split("-", 1)
-        if len(split_id) >= 2:
-            return split_id[1]
-        return instance_id
-
     def __init__(
         self, tesira: Tesira, instance_id, serial_number, input_number, input_name
     ) -> None:
@@ -81,7 +71,7 @@ class TesiraMute(SwitchEntity):
         self._serial = serial_number
         self._instance_id = instance_id
         self._input_number = input_number
-        self._attr_name = self.name_from_instance_id(instance_id) + " - " + input_name
+        self._attr_name = get_name_from_instance_id(instance_id) + " - " + input_name
         self._attr_unique_id = (
             f"{serial_number}_{instance_id.replace(' ', '_')}_{input_number}"
         )

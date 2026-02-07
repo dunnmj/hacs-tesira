@@ -15,7 +15,7 @@ from homeassistant.helpers import entity_platform
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-from . import get_tesira
+from . import get_name_from_instance_id, get_tesira
 from .tesira import CommandFailedException, Tesira
 
 DOMAIN = "tesira_ttp"
@@ -44,13 +44,15 @@ PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_ROUTERS): vol.All(
             cv.ensure_list,
             [
-                vol.Schema({
-                    vol.Required(CONF_ROUTER_ID): cv.string,
-                    vol.Required(CONF_LEVEL_BLOCKS): vol.All(
-                        cv.ensure_list,
-                        [cv.string],
-                    ),
-                })
+                vol.Schema(
+                    {
+                        vol.Required(CONF_ROUTER_ID): cv.string,
+                        vol.Required(CONF_LEVEL_BLOCKS): vol.All(
+                            cv.ensure_list,
+                            [cv.string],
+                        ),
+                    }
+                )
             ],
         ),
     }
@@ -115,21 +117,23 @@ async def async_setup_platform(
             # Create entity for each output (1-indexed for Tesira protocol)
             for output_index, level_id in enumerate(level_blocks, start=1):
                 # Derive output label from level instance tag (remove "Level" suffix)
-                output_label = TesiraSourceSelector.name_from_instance_id(level_id)
-                # Remove "Level" from the end if present
-                if output_label.endswith(" Level"):
-                    output_label = output_label[:-6]
-                elif output_label.endswith("Level"):
-                    output_label = output_label[:-5]
+                output_label = get_name_from_instance_id(level_id)
 
                 # Create entity
                 try:
-                    async_add_entities([
-                        await TesiraRouterOutput.new(
-                            t, router_id, level_id, serial,
-                            output_index, input_map, output_label
-                        )
-                    ])
+                    async_add_entities(
+                        [
+                            await TesiraRouterOutput.new(
+                                t,
+                                router_id,
+                                level_id,
+                                serial,
+                                output_index,
+                                input_map,
+                                output_label,
+                            )
+                        ]
+                    )
                 except CommandFailedException as e:
                     _LOGGER.error(
                         "Error initializing router %s output %d (level %s): %s",
@@ -143,6 +147,7 @@ async def async_setup_platform(
             _LOGGER.error("Error initializing router %s: %s", router_id, str(e))
             continue
 
+
 class TesiraSourceSelector(MediaPlayerEntity):
     """Representation of a Tesira Source Selector."""
 
@@ -153,16 +158,6 @@ class TesiraSourceSelector(MediaPlayerEntity):
     )
     _attr_should_poll = False
 
-    @staticmethod
-    def name_from_instance_id(instance_id):
-        split_id = instance_id.split("- ", 1)
-        if len(split_id) >= 2:
-            return split_id[1]
-        split_id = instance_id.split("-", 1)
-        if len(split_id) >= 2:
-            return split_id[1]
-        return instance_id
-
     def __init__(self, tesira: Tesira, instance_id, serial_number, source_map):
         self._tesira = tesira
         self._serial = serial_number
@@ -171,7 +166,7 @@ class TesiraSourceSelector(MediaPlayerEntity):
         self._source_map = source_map
         self._attr_source_list = list(source_map.keys())
         self._attr_source = self._attr_source_list[0]
-        self._attr_name = self.name_from_instance_id(instance_id)
+        self._attr_name = get_name_from_instance_id(instance_id)
 
     @classmethod
     async def new(cls, tesira: Tesira, instance_id, serial_number, source_map):
@@ -262,9 +257,7 @@ class TesiraRouterOutput(MediaPlayerEntity):
         self._router_id = router_id
         self._level_id = level_id
         self._output_index = output_index
-        self._attr_unique_id = (
-            f"{serial_number}_{router_id.replace(' ', '_')}_output_{output_index}_{level_id.replace(' ', '_')}"
-        )
+        self._attr_unique_id = f"{serial_number}_{router_id.replace(' ', '_')}_output_{output_index}_{level_id.replace(' ', '_')}"
         self._input_map = input_map
         self._attr_source_list = list(input_map.keys())
         self._attr_source = self._attr_source_list[0]
@@ -282,7 +275,13 @@ class TesiraRouterOutput(MediaPlayerEntity):
         output_label: str,
     ):
         self = cls(
-            tesira, router_id, level_id, serial_number, output_index, input_map, output_label
+            tesira,
+            router_id,
+            level_id,
+            serial_number,
+            output_index,
+            input_map,
+            output_label,
         )
 
         # Get initial states
@@ -310,7 +309,9 @@ class TesiraRouterOutput(MediaPlayerEntity):
             )
 
         # Subscribe to updates
-        await tesira.subscribe(router_id, f"input {output_index}", self._routing_callback)
+        await tesira.subscribe(
+            router_id, f"input {output_index}", self._routing_callback
+        )
         await tesira.subscribe(level_id, "level 1", self._volume_callback)
         await tesira.subscribe(level_id, "mute 1", self._mute_callback)
 
@@ -352,7 +353,9 @@ class TesiraRouterOutput(MediaPlayerEntity):
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
         input_id = self._input_map[source]
-        await self._tesira.set_router_output(self._router_id, self._output_index, input_id)
+        await self._tesira.set_router_output(
+            self._router_id, self._output_index, input_id
+        )
         self._attr_source = source
         self.async_write_ha_state()
 

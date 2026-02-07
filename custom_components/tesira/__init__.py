@@ -105,6 +105,13 @@ async def async_setup(hass: HomeAssistant, config):
     return True
 
 
+def get_name_from_instance_id(instance_id: str) -> str:
+    """Extract a friendly name from a Tesira instance ID."""
+    if "-" in instance_id:
+        return instance_id.rsplit("-", 1)[0].strip()
+    return instance_id
+
+
 TESIRA_CREATION_LOCK = asyncio.Lock()
 
 
