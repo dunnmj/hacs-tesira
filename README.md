@@ -9,13 +9,14 @@ This is a **YAML-configured integration** (no Config Flow / UI setup).
 ## Overview
 
 - **Domain:** `tesira_ttp`
-- **Platforms:** `media_player`, `switch`
+- **Platforms:** `media_player`, `switch`, `number`
 - **Configuration:** `configuration.yaml`
 - **Connection:** SSH (via `asyncssh`)
 - **Protocol:** Tesira Text Protocol Server
 - **Action:** `tesira_ttp.send_command`
 
 The integration maintains:
+
 - a command connection for control
 - a subscription connection for live updates (levels, mutes, source changes)
 
@@ -26,6 +27,7 @@ The integration maintains:
 - Source selection via `media_player`
 - Volume and mute control
 - Router output control with volume and mute per zone
+- Standalone level control via `number` entities (percentage slider)
 - Per-channel mute switches
 - Real-time updates using Tesira publish subscriptions
 - Raw command service for advanced/custom control
@@ -34,13 +36,13 @@ The integration maintains:
 
 ## Installation (HACS)
 
-1. Open **HACS** in Home Assistant  
-2. Go to **Integrations**  
-3. Open the menu (⋮) → **Custom repositories**  
-4. Add:  
-   - **Repository:** https://github.com/dunnmj/hacs-tesira  
-   - **Category:** Integration  
-5. Search for **Tesira Control**  
+1. Open **HACS** in Home Assistant
+2. Go to **Integrations**
+3. Open the menu (⋮) → **Custom repositories**
+4. Add:
+   - **Repository:** https://github.com/dunnmj/hacs-tesira
+   - **Category:** Integration
+5. Search for **Tesira Control**
 6. Install and **restart Home Assistant**
 
 ---
@@ -59,12 +61,15 @@ tesira_ttp:
     ip_address: 192.168.1.50
     username: "admin"
     password: "your_password"
-    zones:
+    source_selectors:
       - "01 - Lounge Source Selector"
       - "02 - Bar Source Selector"
     mutes:
       - "01 - Lounge Inputs"
       - "02 - Bar Inputs"
+    levels:
+      - "01 - Lounge Level"
+      - "02 - Bar Level"
     routers:
       - router_id: "ZoneRouter"
         level_blocks:
@@ -77,15 +82,16 @@ tesira_ttp:
 
 Each item under `tesira_ttp:` supports:
 
-| Key | Required | Description |
-|----|----|----|
-| name | ✅ | Friendly name for this Tesira config block |
-| ip_address | ✅ | IP address or hostname of the Tesira device |
-| username | ✅ | SSH username |
-| password | ✅ | SSH password |
-| zones | ✅ | List of Source Selector instance IDs to expose as `media_player` entities |
-| mutes | ❌ | List of Mute Block instance IDs used to create per-channel mute switches |
-| routers | ❌ | List of Router configurations (see Router Outputs section below) |
+| Key              | Required | Description                                                                         |
+| ---------------- | -------- | ----------------------------------------------------------------------------------- |
+| name             | ✅       | Friendly name for this Tesira config block                                          |
+| ip_address       | ✅       | IP address or hostname of the Tesira device                                         |
+| username         | ✅       | SSH username                                                                        |
+| password         | ✅       | SSH password                                                                        |
+| source_selectors | ✅       | List of Source Selector instance IDs to expose as `media_player` entities           |
+| mutes            | ❌       | List of Mute Block instance IDs used to create per-channel mute switches            |
+| levels           | ❌       | List of Level Block instance IDs to expose as `number` entities (percentage slider) |
+| routers          | ❌       | List of Router configurations (see Router Outputs section below)                    |
 
 ---
 
@@ -93,14 +99,16 @@ Each item under `tesira_ttp:` supports:
 
 ### Media Player (`media_player`)
 
-A `media_player` entity is created for each instance ID listed under `zones`.
+A `media_player` entity is created for each instance ID listed under `source_selectors`.
 
 Supported features:
-- Source selection  
-- Volume control  
-- Mute/unmute  
+
+- Source selection
+- Volume control
+- Mute/unmute
 
 The integration subscribes to:
+
 - `outputLevel`
 - `outputMute`
 - `sourceSelection`
@@ -116,18 +124,21 @@ Router outputs provide zone-based routing with independent volume and mute contr
 **Configuration Structure:**
 
 Each router configuration requires:
+
 - **router_id**: The instance ID of the Router block in Tesira
 - **level_blocks**: A list of Level block instance IDs (one per output zone)
 
 The integration creates one `media_player` entity for each Level block in the list. The Level blocks are mapped to Router outputs in order (first Level block = output 1, second = output 2, etc.).
 
 **Important:** Router blocks in Tesira use:
+
 - **0-indexed inputs** (0, 1, 2, 3, 4 for a 5-input router)
 - **1-indexed outputs** (1, 2, 3, 4, 5 for a 5-output router)
 
 This is different from Source Selectors which are 1-indexed for both sources and outputs.
 
 **What each entity controls:**
+
 - **Source selection**: Routes any Router input to that specific output
 - **Volume control**: Adjusts the Level block volume in dB
 - **Mute control**: Mutes/unmutes the Level block
@@ -140,7 +151,7 @@ tesira_ttp:
     ip_address: 192.168.1.50
     username: "admin"
     password: "password"
-    zones:
+    source_selectors:
       - "MainSourceSelector"
     routers:
       - router_id: "ZoneRouter"
@@ -151,6 +162,7 @@ tesira_ttp:
 ```
 
 This creates 3 media_player entities:
+
 - Each controls routing from the ZoneRouter inputs to its respective output
 - Each has independent volume and mute control via its Level block
 - Entity names are derived from the Level block labels in Tesira
@@ -158,6 +170,7 @@ This creates 3 media_player entities:
 **Real-time updates:**
 
 The integration subscribes to:
+
 - Router output routing changes
 - Level block volume changes
 - Level block mute state changes
@@ -166,12 +179,46 @@ All three subscriptions work together to provide complete zone control.
 
 ---
 
+### Number (`number`)
+
+A `number` entity is created for each instance ID listed under `levels`.
+
+Each entity exposes a Tesira Level block as a percentage slider (0–100%). The dB-to-percentage conversion uses the same logarithmic scale as the media player volume controls.
+
+Supported features:
+
+- Set level as a percentage (0–100%)
+- Real-time updates via Tesira subscriptions
+
+The integration subscribes to:
+
+- `level 1`
+
+for real-time state updates.
+
+**Example:**
+
+```yaml
+tesira_ttp:
+  - name: "Tesira DSP"
+    ip_address: 192.168.1.50
+    username: "admin"
+    password: "password"
+    source_selectors: []
+    levels:
+      - "01 - Lounge Level"
+      - "02 - Bar Level"
+```
+
+---
+
 ### Switch (`switch`)
 
 For each instance ID listed under `mutes`, the integration:
-- Queries the mute block  
-- Discovers the number of channels  
-- Creates one mute switch per channel  
+
+- Queries the mute block
+- Discovers the number of channels
+- Creates one mute switch per channel
 
 Each switch controls the channel mute state directly.
 
@@ -179,30 +226,30 @@ Each switch controls the channel mute state directly.
 
 ## Entity Naming Behavior (Important!)
 
-### Media player entity names
+Entity names are derived from the instance ID you provide in YAML, not queried from Tesira.
 
-Media player names are derived from the instance ID you provide in YAML, not queried from Tesira.
+Naming rule:
 
-Naming rules:
-- If the instance ID contains `"- "` or `"-"`, everything after that is used  
-- Otherwise, the full instance ID is used  
+- If the instance ID contains `"-"`, everything **before** the last `"-"` is used (with whitespace trimmed)
+- Otherwise, the full instance ID is used
 
 Examples:
 
-| Instance ID | Entity Name |
-|------------|------------|
-| `01 - Lounge Source Selector` | `Lounge Source Selector` |
-| `MainRoomSourceSelector` | `MainRoomSourceSelector` |
+| Instance ID                   | Entity Name              |
+| ----------------------------- | ------------------------ |
+| `01 - Lounge Source Selector` | `01`                     |
+| `Source - Office`             | `Source`                 |
+| `Zone 1 - Level`              | `Zone 1`                 |
+| `MainRoomSourceSelector`      | `MainRoomSourceSelector` |
 
-You control media player naming by how you name your Tesira blocks.
-
----
+You control entity naming by how you name your Tesira blocks.
 
 ### Switch entity names (mute channels)
 
 Switch names are a combination of:
-1. The cleaned instance ID (same logic as above)  
-2. The channel label fetched directly from Tesira  
+
+1. The cleaned instance ID (same logic as above)
+2. The channel label fetched directly from Tesira
 
 Format:
 
@@ -210,8 +257,8 @@ Format:
 
 Example:
 
-`Lounge Inputs - Mic 1`  
-`Lounge Inputs - Lectern`
+`01 - Mic 1`
+`01 - Lectern`
 
 Channel labels come directly from the Tesira configuration.
 
@@ -222,18 +269,19 @@ Channel labels come directly from the Tesira configuration.
 Source names are pulled directly from Tesira.
 
 For each source selector:
-- The integration queries each source  
-- Uses the Tesira source label as the selectable source name in Home Assistant  
+
+- The integration queries each source
+- Uses the Tesira source label as the selectable source name in Home Assistant
 
 ---
 
 ## Actions
 
-### `tesira.send_command`
+### `tesira_ttp.send_command`
 
 Send raw Tesira Text Protocol commands to a device.
 
-**Target:** A `media_player` entity from this integration  
+**Target:** A `media_player` entity from this integration
 **Field:** `command_strings` (list of strings)
 
 ### Example
@@ -244,14 +292,15 @@ target:
   entity_id: media_player.lounge_source_selector
 data:
   command_strings:
-    - 'SourceSelector1 set outputMute true'
-    - 'SourceSelector1 set outputLevel -20.0'
+    - "SourceSelector1 set outputMute true"
+    - "SourceSelector1 set outputLevel -20.0"
 ```
 
 This service is useful for:
-- Unsupported blocks  
-- Advanced control  
-- Debugging  
+
+- Unsupported blocks
+- Advanced control
+- Debugging
 
 ---
 
@@ -271,14 +320,22 @@ Restart Home Assistant, reproduce the issue, and include logs when opening issue
 ### Common issues
 
 **No entities appear**
-- Ensure `zones` is defined (required)
+
+- Ensure `source_selectors` is defined (required)
 - Verify instance IDs exactly match Tesira block instance IDs
 
 **Switches missing**
+
 - `mutes` is optional
 - Input blocks must expose channel labels
 
+**Level sliders missing**
+
+- `levels` is optional
+- Instance IDs must exactly match Level block instance IDs in Tesira
+
 **Connection issues**
+
 - Confirm SSH access to the Tesira
 - Ensure the Text Protocol Server is enabled
 - Check firewalls (SSH/TCP)
@@ -298,6 +355,7 @@ Contributions and improvements welcome.
 ## Support / Issues
 
 Please open GitHub issues and include:
+
 - your YAML configuration (with secrets removed)
 - relevant debug logs
 - Tesira firmware version and block instance IDs

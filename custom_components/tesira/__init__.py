@@ -13,8 +13,9 @@ from homeassistant.helpers.discovery import async_load_platform
 from .tesira import Tesira
 
 DOMAIN = "tesira_ttp"
-CONF_ZONES = "zones"
+CONF_SOURCE_SELECTORS = "source_selectors"
 CONF_MUTES = "mutes"
+CONF_LEVELS = "levels"
 CONF_ROUTERS = "routers"
 CONF_ROUTER_ID = "router_id"
 CONF_LEVEL_BLOCKS = "level_blocks"
@@ -30,7 +31,7 @@ CONFIG_SCHEMA = vol.Schema(
                         vol.Required(CONF_USERNAME): cv.string,
                         vol.Required(CONF_PASSWORD): cv.string,
                         vol.Required(CONF_NAME): cv.string,
-                        vol.Required(CONF_ZONES): vol.All(
+                        vol.Required(CONF_SOURCE_SELECTORS): vol.All(
                             cv.ensure_list,
                             [cv.string],
                         ),
@@ -38,16 +39,22 @@ CONFIG_SCHEMA = vol.Schema(
                             cv.ensure_list,
                             [cv.string],
                         ),
+                        vol.Optional(CONF_LEVELS): vol.All(
+                            cv.ensure_list,
+                            [cv.string],
+                        ),
                         vol.Optional(CONF_ROUTERS): vol.All(
                             cv.ensure_list,
                             [
-                                vol.Schema({
-                                    vol.Required(CONF_ROUTER_ID): cv.string,
-                                    vol.Required(CONF_LEVEL_BLOCKS): vol.All(
-                                        cv.ensure_list,
-                                        [cv.string],
-                                    ),
-                                })
+                                vol.Schema(
+                                    {
+                                        vol.Required(CONF_ROUTER_ID): cv.string,
+                                        vol.Required(CONF_LEVEL_BLOCKS): vol.All(
+                                            cv.ensure_list,
+                                            [cv.string],
+                                        ),
+                                    }
+                                )
                             ],
                         ),
                     }
@@ -65,44 +72,41 @@ COMMON_CONFIGS = [CONF_IP_ADDRESS, CONF_USERNAME, CONF_PASSWORD, CONF_NAME]
 async def async_setup(hass: HomeAssistant, config):
     """Set up entities from config."""
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
-    reformatted_config = {
-        "media_player": [
-            {
-                "platform": DOMAIN,
-                **{
-                    k: v
-                    for k, v in tesira_device.items()
-                    if k in [*COMMON_CONFIGS, CONF_ZONES, CONF_ROUTERS]
-                },
-            }
-            for tesira_device in config[DOMAIN]
-        ],
-        "switch": [
-            {
-                "platform": DOMAIN,
-                **{
-                    k: v
-                    for k, v in tesira_device.items()
-                    if k in [*COMMON_CONFIGS, CONF_MUTES]
-                },
-            }
-            for tesira_device in config[DOMAIN]
-        ],
-    }
-
-    hass.async_create_task(
-        async_load_platform(
-            hass, "media_player", DOMAIN, None, copy.deepcopy(reformatted_config)
-        ),
-        eager_start=True,
-    )
-    hass.async_create_task(
-        async_load_platform(
-            hass, "switch", DOMAIN, copy.deepcopy(reformatted_config), copy.deepcopy(reformatted_config)
-        ),
-        eager_start=True,
-    )
+    for tesira_device in config[DOMAIN]:
+        hass.async_create_task(
+            async_load_platform(
+                hass, "media_player", DOMAIN, copy.deepcopy(tesira_device), config
+            ),
+            eager_start=True,
+        )
+        hass.async_create_task(
+            async_load_platform(
+                hass,
+                "switch",
+                DOMAIN,
+                copy.deepcopy(tesira_device),
+                config,
+            ),
+            eager_start=True,
+        )
+        hass.async_create_task(
+            async_load_platform(
+                hass,
+                "number",
+                DOMAIN,
+                copy.deepcopy(tesira_device),
+                config,
+            ),
+            eager_start=True,
+        )
     return True
+
+
+def get_name_from_instance_id(instance_id: str) -> str:
+    """Extract a friendly name from a Tesira instance ID."""
+    if "-" in instance_id:
+        return instance_id.rsplit("-", 1)[0].strip()
+    return instance_id
 
 
 TESIRA_CREATION_LOCK = asyncio.Lock()
