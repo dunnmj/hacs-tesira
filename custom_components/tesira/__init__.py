@@ -41,13 +41,15 @@ CONFIG_SCHEMA = vol.Schema(
                         vol.Optional(CONF_ROUTERS): vol.All(
                             cv.ensure_list,
                             [
-                                vol.Schema({
-                                    vol.Required(CONF_ROUTER_ID): cv.string,
-                                    vol.Required(CONF_LEVEL_BLOCKS): vol.All(
-                                        cv.ensure_list,
-                                        [cv.string],
-                                    ),
-                                })
+                                vol.Schema(
+                                    {
+                                        vol.Required(CONF_ROUTER_ID): cv.string,
+                                        vol.Required(CONF_LEVEL_BLOCKS): vol.All(
+                                            cv.ensure_list,
+                                            [cv.string],
+                                        ),
+                                    }
+                                )
                             ],
                         ),
                     }
@@ -89,19 +91,23 @@ async def async_setup(hass: HomeAssistant, config):
             for tesira_device in config[DOMAIN]
         ],
     }
-
-    hass.async_create_task(
-        async_load_platform(
-            hass, "media_player", DOMAIN, None, copy.deepcopy(reformatted_config)
-        ),
-        eager_start=True,
-    )
-    hass.async_create_task(
-        async_load_platform(
-            hass, "switch", DOMAIN, copy.deepcopy(reformatted_config), copy.deepcopy(reformatted_config)
-        ),
-        eager_start=True,
-    )
+    for tesira_device in config[DOMAIN]:
+        hass.async_create_task(
+            async_load_platform(
+                hass, "media_player", DOMAIN, copy.deepcopy(tesira_device), config
+            ),
+            eager_start=True,
+        )
+        hass.async_create_task(
+            async_load_platform(
+                hass,
+                "switch",
+                DOMAIN,
+                copy.deepcopy(tesira_device),
+                config,
+            ),
+            eager_start=True,
+        )
     return True
 
 

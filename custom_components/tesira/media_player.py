@@ -69,8 +69,9 @@ async def async_setup_platform(
     hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
     """Set up the Tesira platform."""
+    config = discovery_info
     _LOGGER.debug("MediaPlayer: %s", config)
-    if config == {}:
+    if config.get(CONF_ZONES, []) == [] and config.get(CONF_ROUTERS, []) == []:
         return
 
     ip = config[CONF_IP_ADDRESS]
