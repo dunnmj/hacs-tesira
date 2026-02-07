@@ -62,20 +62,19 @@ tesira_ttp:
     username: "admin"
     password: "your_password"
     source_selectors:
-      - "01 - Lounge Source Selector"
-      - "02 - Bar Source Selector"
+      - "Lounge - Source Selector"
+      - "Bar - Source Selector"
     mutes:
-      - "01 - Lounge Inputs"
-      - "02 - Bar Inputs"
+      - "Lounge - Mutes"
+      - "Bar - Mutes"
     levels:
-      - "01 - Lounge Level"
-      - "02 - Bar Level"
+      - "Lounge - Level"
+      - "Bar - Level"
     routers:
-      - router_id: "ZoneRouter"
+      - router_id: "Studio - Router"
         level_blocks:
-          - "Zone1Level"
-          - "Zone2Level"
-          - "Zone3Level"
+          - "Studio Upper - Level"
+          - "Studio Lower - Level"
 ```
 
 ### Configuration options
@@ -243,6 +242,17 @@ Examples:
 | `MainRoomSourceSelector`      | `MainRoomSourceSelector` |
 
 You control entity naming by how you name your Tesira blocks.
+
+### Router output entity names
+
+Router output entities are named after their associated Level block, using the same naming rule above. The router instance ID itself is not used in the entity name.
+
+Examples:
+
+| Level Block Instance ID | Entity Name    |
+| ----------------------- | -------------- |
+| `Studio Upper - Level`  | `Studio Upper` |
+| `Zone1Level`            | `Zone1Level`   |
 
 ### Switch entity names (mute channels)
 
