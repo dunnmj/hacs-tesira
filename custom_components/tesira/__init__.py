@@ -15,6 +15,9 @@ from .tesira import Tesira
 DOMAIN = "tesira_ttp"
 CONF_ZONES = "zones"
 CONF_MUTES = "mutes"
+CONF_ROUTERS = "routers"
+CONF_ROUTER_ID = "router_id"
+CONF_LEVEL_BLOCKS = "level_blocks"
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -34,6 +37,18 @@ CONFIG_SCHEMA = vol.Schema(
                         vol.Optional(CONF_MUTES): vol.All(
                             cv.ensure_list,
                             [cv.string],
+                        ),
+                        vol.Optional(CONF_ROUTERS): vol.All(
+                            cv.ensure_list,
+                            [
+                                vol.Schema({
+                                    vol.Required(CONF_ROUTER_ID): cv.string,
+                                    vol.Required(CONF_LEVEL_BLOCKS): vol.All(
+                                        cv.ensure_list,
+                                        [cv.string],
+                                    ),
+                                })
+                            ],
                         ),
                     }
                 )
@@ -57,7 +72,7 @@ async def async_setup(hass: HomeAssistant, config):
                 **{
                     k: v
                     for k, v in tesira_device.items()
-                    if k in [*COMMON_CONFIGS, CONF_ZONES]
+                    if k in [*COMMON_CONFIGS, CONF_ZONES, CONF_ROUTERS]
                 },
             }
             for tesira_device in config[DOMAIN]

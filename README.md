@@ -25,6 +25,7 @@ The integration maintains:
 
 - Source selection via `media_player`
 - Volume and mute control
+- Router output control with volume and mute per zone
 - Per-channel mute switches
 - Real-time updates using Tesira publish subscriptions
 - Raw command service for advanced/custom control
@@ -64,6 +65,12 @@ tesira_ttp:
     mutes:
       - "01 - Lounge Inputs"
       - "02 - Bar Inputs"
+    routers:
+      - router_id: "ZoneRouter"
+        level_blocks:
+          - "Zone1Level"
+          - "Zone2Level"
+          - "Zone3Level"
 ```
 
 ### Configuration options
@@ -78,6 +85,7 @@ Each item under `tesira_ttp:` supports:
 | password | ✅ | SSH password |
 | zones | ✅ | List of Source Selector instance IDs to expose as `media_player` entities |
 | mutes | ❌ | List of Mute Block instance IDs used to create per-channel mute switches |
+| routers | ❌ | List of Router configurations (see Router Outputs section below) |
 
 ---
 
@@ -98,6 +106,63 @@ The integration subscribes to:
 - `sourceSelection`
 
 for real-time state updates.
+
+---
+
+### Router Outputs (`media_player`)
+
+Router outputs provide zone-based routing with independent volume and mute control.
+
+**Configuration Structure:**
+
+Each router configuration requires:
+- **router_id**: The instance ID of the Router block in Tesira
+- **level_blocks**: A list of Level block instance IDs (one per output zone)
+
+The integration creates one `media_player` entity for each Level block in the list. The Level blocks are mapped to Router outputs in order (first Level block = output 1, second = output 2, etc.).
+
+**Important:** Router blocks in Tesira use:
+- **0-indexed inputs** (0, 1, 2, 3, 4 for a 5-input router)
+- **1-indexed outputs** (1, 2, 3, 4, 5 for a 5-output router)
+
+This is different from Source Selectors which are 1-indexed for both sources and outputs.
+
+**What each entity controls:**
+- **Source selection**: Routes any Router input to that specific output
+- **Volume control**: Adjusts the Level block volume in dB
+- **Mute control**: Mutes/unmutes the Level block
+
+**Example:**
+
+```yaml
+tesira_ttp:
+  - name: "Tesira DSP"
+    ip_address: 192.168.1.50
+    username: "admin"
+    password: "password"
+    zones:
+      - "MainSourceSelector"
+    routers:
+      - router_id: "ZoneRouter"
+        level_blocks:
+          - "Zone1Level"
+          - "Zone2Level"
+          - "Zone3Level"
+```
+
+This creates 3 media_player entities:
+- Each controls routing from the ZoneRouter inputs to its respective output
+- Each has independent volume and mute control via its Level block
+- Entity names are derived from the Level block labels in Tesira
+
+**Real-time updates:**
+
+The integration subscribes to:
+- Router output routing changes
+- Level block volume changes
+- Level block mute state changes
+
+All three subscriptions work together to provide complete zone control.
 
 ---
 

@@ -236,3 +236,71 @@ class Tesira:
         await self._send_command(
             f'"{instance_id}" set mute {input_number} {str(mute).lower()}'
         )
+
+    async def router_inputs(self, instance_id):
+        """Get router input count and labels, return dict mapping labels to input numbers."""
+        input_count = int(
+            self.parse_value(
+                await self._send_command(f'"{instance_id}" get numInputs', expects_value=True)
+            )
+        )
+        input_map = {}
+        # Add "No Input" option for index 0
+        input_map["No Input"] = 0
+        # Router inputLabel queries are 0-indexed (0, 1, 2...)
+        # But set input command uses 1-indexed for actual inputs (0=no input, 1=first input, etc.)
+        # So we query with 0-based indices but map to 1-based values
+        for label_index in range(input_count):
+            input_name = self.parse_value(
+                await self._send_command(
+                    f'"{instance_id}" get inputLabel {label_index}', expects_value=True
+                )
+            )[1:-1]
+            input_map[input_name] = label_index + 1
+        return input_map
+
+    async def get_label(self, instance_id):
+        """Get block label."""
+        label = self.parse_value(
+            await self._send_command(f'"{instance_id}" get label', expects_value=True)
+        )
+        return label[1:-1]
+
+    async def get_router_output(self, router_id, output_index):
+        """Get current input routed to specific output."""
+        value = self.parse_value(
+            await self._send_command(
+                f'"{router_id}" get input {output_index}', expects_value=True
+            )
+        )
+        return int(value)
+
+    async def set_router_output(self, router_id, output_index, input_index):
+        """Route input to output."""
+        await self._send_command(
+            f'"{router_id}" set input {output_index} {input_index}'
+        )
+
+    async def get_level(self, instance_id):
+        """Get volume level in dB from Level block."""
+        value = self.parse_value(
+            await self._send_command(f'"{instance_id}" get level 1', expects_value=True)
+        )
+        return float(value)
+
+    async def set_level(self, instance_id, db_value):
+        """Set volume level in dB."""
+        await self._send_command(f'"{instance_id}" set level 1 {db_value}')
+
+    async def get_mute(self, instance_id):
+        """Get mute state from Level block."""
+        value = self.parse_value(
+            await self._send_command(f'"{instance_id}" get mute 1', expects_value=True)
+        )
+        return value.lower() == "true"
+
+    async def set_level_mute(self, instance_id, mute):
+        """Set mute state on Level block."""
+        await self._send_command(
+            f'"{instance_id}" set mute 1 {str(mute).lower()}'
+        )
