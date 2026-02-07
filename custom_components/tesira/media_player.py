@@ -26,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PORT = 23
 
-CONF_ZONES = "zones"
+CONF_SOURCE_SELECTORS = "source_selectors"
 CONF_ROUTERS = "routers"
 CONF_ROUTER_ID = "router_id"
 CONF_LEVEL_BLOCKS = "level_blocks"
@@ -37,7 +37,7 @@ PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
         vol.Required(CONF_USERNAME): cv.string,
         vol.Required(CONF_PASSWORD): cv.string,
         vol.Required(CONF_NAME): cv.string,
-        vol.Required(CONF_ZONES): vol.All(
+        vol.Required(CONF_SOURCE_SELECTORS): vol.All(
             cv.ensure_list,
             [cv.string],
         ),
@@ -71,11 +71,14 @@ async def async_setup_platform(
     """Set up the Tesira platform."""
     config = discovery_info
     _LOGGER.debug("MediaPlayer: %s", config)
-    if config.get(CONF_ZONES, []) == [] and config.get(CONF_ROUTERS, []) == []:
+    if (
+        config.get(CONF_SOURCE_SELECTORS, []) == []
+        and config.get(CONF_ROUTERS, []) == []
+    ):
         return
 
     ip = config[CONF_IP_ADDRESS]
-    source_selector_instance_ids = config[CONF_ZONES]
+    source_selector_instance_ids = config[CONF_SOURCE_SELECTORS]
     platform = entity_platform.async_get_current_platform()
 
     platform.async_register_entity_service(

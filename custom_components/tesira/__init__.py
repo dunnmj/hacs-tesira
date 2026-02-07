@@ -13,7 +13,7 @@ from homeassistant.helpers.discovery import async_load_platform
 from .tesira import Tesira
 
 DOMAIN = "tesira_ttp"
-CONF_ZONES = "zones"
+CONF_SOURCE_SELECTORS = "source_selectors"
 CONF_MUTES = "mutes"
 CONF_LEVELS = "levels"
 CONF_ROUTERS = "routers"
@@ -31,7 +31,7 @@ CONFIG_SCHEMA = vol.Schema(
                         vol.Required(CONF_USERNAME): cv.string,
                         vol.Required(CONF_PASSWORD): cv.string,
                         vol.Required(CONF_NAME): cv.string,
-                        vol.Required(CONF_ZONES): vol.All(
+                        vol.Required(CONF_SOURCE_SELECTORS): vol.All(
                             cv.ensure_list,
                             [cv.string],
                         ),
@@ -72,30 +72,6 @@ COMMON_CONFIGS = [CONF_IP_ADDRESS, CONF_USERNAME, CONF_PASSWORD, CONF_NAME]
 async def async_setup(hass: HomeAssistant, config):
     """Set up entities from config."""
     hass.data[DOMAIN] = hass.data.get(DOMAIN, {})
-    reformatted_config = {
-        "media_player": [
-            {
-                "platform": DOMAIN,
-                **{
-                    k: v
-                    for k, v in tesira_device.items()
-                    if k in [*COMMON_CONFIGS, CONF_ZONES, CONF_ROUTERS]
-                },
-            }
-            for tesira_device in config[DOMAIN]
-        ],
-        "switch": [
-            {
-                "platform": DOMAIN,
-                **{
-                    k: v
-                    for k, v in tesira_device.items()
-                    if k in [*COMMON_CONFIGS, CONF_MUTES]
-                },
-            }
-            for tesira_device in config[DOMAIN]
-        ],
-    }
     for tesira_device in config[DOMAIN]:
         hass.async_create_task(
             async_load_platform(
