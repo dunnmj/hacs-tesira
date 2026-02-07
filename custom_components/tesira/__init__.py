@@ -15,6 +15,7 @@ from .tesira import Tesira
 DOMAIN = "tesira_ttp"
 CONF_ZONES = "zones"
 CONF_MUTES = "mutes"
+CONF_LEVELS = "levels"
 CONF_ROUTERS = "routers"
 CONF_ROUTER_ID = "router_id"
 CONF_LEVEL_BLOCKS = "level_blocks"
@@ -35,6 +36,10 @@ CONFIG_SCHEMA = vol.Schema(
                             [cv.string],
                         ),
                         vol.Optional(CONF_MUTES): vol.All(
+                            cv.ensure_list,
+                            [cv.string],
+                        ),
+                        vol.Optional(CONF_LEVELS): vol.All(
                             cv.ensure_list,
                             [cv.string],
                         ),
@@ -102,6 +107,16 @@ async def async_setup(hass: HomeAssistant, config):
             async_load_platform(
                 hass,
                 "switch",
+                DOMAIN,
+                copy.deepcopy(tesira_device),
+                config,
+            ),
+            eager_start=True,
+        )
+        hass.async_create_task(
+            async_load_platform(
+                hass,
+                "number",
                 DOMAIN,
                 copy.deepcopy(tesira_device),
                 config,
