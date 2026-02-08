@@ -4,58 +4,38 @@ import logging
 import math
 
 from numpy import double
-import voluptuous as vol
 
-from homeassistant.components.number import (
-    PLATFORM_SCHEMA as NUMBER_PLATFORM_SCHEMA,
-    NumberEntity,
-)
-from homeassistant.const import CONF_IP_ADDRESS, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.components.number import NumberEntity
 from homeassistant.core import HomeAssistant
-import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import get_name_from_instance_id, get_tesira
+from . import TesiraConfigEntry, get_name_from_instance_id
+from .const import CONF_LEVELS
 from .tesira import CommandFailedException, Tesira
 
 _LOGGER = logging.getLogger(__name__)
-DOMAIN = "tesira_ttp"
-CONF_LEVELS = "levels"
-
-PLATFORM_SCHEMA = NUMBER_PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_IP_ADDRESS): cv.string,
-        vol.Required(CONF_USERNAME): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_NAME): cv.string,
-        vol.Optional(CONF_LEVELS): vol.All(
-            cv.ensure_list,
-            [cv.string],
-        ),
-    }
-)
 
 
-async def async_setup_platform(
-    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
-):
-    """Set up the Tesira number platform."""
-    config = discovery_info
-    _LOGGER.debug("Number: %s", config)
-    if config.get(CONF_LEVELS, []) == []:
-        return
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: TesiraConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up Tesira number entities from a config entry."""
+    tesira = entry.runtime_data
+    options = entry.options
+    serial = await tesira.serial_number()
 
-    t = await get_tesira(
-        hass, config[CONF_IP_ADDRESS], config[CONF_USERNAME], config[CONF_PASSWORD]
-    )
-    serial = await t.serial_number()
+    entities: list[NumberEntity] = []
 
-    for instance_id in config[CONF_LEVELS]:
+    for instance_id in options.get(CONF_LEVELS, []):
         try:
-            async_add_entities([await TesiraLevel.new(t, instance_id, serial)])
+            entities.append(await TesiraLevel.new(tesira, instance_id, serial))
         except CommandFailedException as e:
             _LOGGER.error("Error initializing level %s: %s", instance_id, str(e))
             continue
+
+    async_add_entities(entities)
 
 
 class TesiraLevel(NumberEntity):

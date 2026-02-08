@@ -1,78 +1,50 @@
 import logging
 from typing import Any
 
-import voluptuous as vol
-
-from homeassistant.components.switch import (
-    PLATFORM_SCHEMA as SWITCH_PLATFORM_SCHEMA,
-    SwitchEntity,
-)
-from homeassistant.const import CONF_IP_ADDRESS, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
-import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import get_name_from_instance_id, get_tesira
+from . import TesiraConfigEntry, get_name_from_instance_id
+from .const import CONF_LOGIC_STATES, CONF_MUTES
 from .tesira import CommandFailedException, Tesira
 
 _LOGGER = logging.getLogger(__name__)
-DOMAIN = "tesira_ttp"
-CONF_MUTES = "mutes"
-CONF_LOGIC_STATES = "logic_states"
-
-quote = '"'
-
-PLATFORM_SCHEMA = SWITCH_PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_IP_ADDRESS): cv.string,
-        vol.Required(CONF_USERNAME): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_NAME): cv.string,
-        vol.Optional(CONF_MUTES): vol.All(
-            cv.ensure_list,
-            [cv.string],
-        ),
-        vol.Optional(CONF_LOGIC_STATES): vol.All(
-            cv.ensure_list,
-            [cv.string],
-        ),
-    }
-)
 
 
-async def async_setup_platform(
-    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
-):
-    config = discovery_info
-    _LOGGER.debug("Switch: %s", config)
-    if config.get(CONF_MUTES, []) == []:
-        return
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: TesiraConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up Tesira switch entities from a config entry."""
+    tesira = entry.runtime_data
+    options = entry.options
+    serial = await tesira.serial_number()
 
-    t = await get_tesira(
-        hass, config[CONF_IP_ADDRESS], config[CONF_USERNAME], config[CONF_PASSWORD]
-    )
-    serial = await t.serial_number()
-    for instance_id in config[CONF_MUTES]:
+    entities: list[SwitchEntity] = []
+
+    for instance_id in options.get(CONF_MUTES, []):
         try:
-            input_map = await t.inputs(instance_id, "numChannels", "label")
+            input_map = await tesira.inputs(instance_id, "numChannels", "label")
             for input_name, input_number in input_map.items():
-                async_add_entities(
-                    [
-                        await TesiraMute.new(
-                            t, instance_id, serial, input_number, input_name
-                        )
-                    ]
+                entities.append(
+                    await TesiraMute.new(
+                        tesira, instance_id, serial, input_number, input_name
+                    )
                 )
         except CommandFailedException as e:
             _LOGGER.error("Error initializing mute control %s: %s", instance_id, str(e))
             continue
 
-    for instance_id in config.get(CONF_LOGIC_STATES, []):
+    for instance_id in options.get(CONF_LOGIC_STATES, []):
         try:
-            async_add_entities([await TesiraLogicState.new(t, instance_id, serial)])
+            entities.append(await TesiraLogicState.new(tesira, instance_id, serial))
         except CommandFailedException as e:
             _LOGGER.error("Error initializing logic state %s: %s", instance_id, str(e))
             continue
+
+    async_add_entities(entities)
 
 
 class TesiraMute(SwitchEntity):

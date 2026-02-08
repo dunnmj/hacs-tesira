@@ -1,63 +1,42 @@
-"""Binary sensor platform for Tesira state blocks."""
+"""Binary sensor platform for Tesira logic meter blocks."""
 
 import logging
 
-import voluptuous as vol
-
-from homeassistant.components.binary_sensor import (
-    PLATFORM_SCHEMA as BINARY_SENSOR_PLATFORM_SCHEMA,
-    BinarySensorEntity,
-)
-from homeassistant.const import CONF_IP_ADDRESS, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
-import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import get_name_from_instance_id, get_tesira
+from . import TesiraConfigEntry, get_name_from_instance_id
+from .const import CONF_LOGIC_METERS
 from .tesira import CommandFailedException, Tesira
 
 _LOGGER = logging.getLogger(__name__)
-DOMAIN = "tesira_ttp"
-CONF_LOGIC_METERS = "logic_meters"
-
-PLATFORM_SCHEMA = BINARY_SENSOR_PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_IP_ADDRESS): cv.string,
-        vol.Required(CONF_USERNAME): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_NAME): cv.string,
-        vol.Optional(CONF_LOGIC_METERS): vol.All(
-            cv.ensure_list,
-            [cv.string],
-        ),
-    }
-)
 
 
-async def async_setup_platform(
-    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
-):
-    """Set up the Tesira binary sensor platform."""
-    config = discovery_info
-    _LOGGER.debug("Binary sensor: %s", config)
-    if config.get(CONF_LOGIC_METERS, []) == []:
-        return
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: TesiraConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up Tesira binary sensor entities from a config entry."""
+    tesira = entry.runtime_data
+    options = entry.options
+    serial = await tesira.serial_number()
 
-    t = await get_tesira(
-        hass, config[CONF_IP_ADDRESS], config[CONF_USERNAME], config[CONF_PASSWORD]
-    )
-    serial = await t.serial_number()
+    entities: list[BinarySensorEntity] = []
 
-    for instance_id in config[CONF_LOGIC_METERS]:
+    for instance_id in options.get(CONF_LOGIC_METERS, []):
         try:
-            async_add_entities(
-                [await TesiraStateBinarySensor.new(t, instance_id, serial)]
+            entities.append(
+                await TesiraStateBinarySensor.new(tesira, instance_id, serial)
             )
         except CommandFailedException as e:
             _LOGGER.error(
                 "Error initializing binary sensor %s: %s", instance_id, str(e)
             )
             continue
+
+    async_add_entities(entities)
 
 
 class TesiraStateBinarySensor(BinarySensorEntity):

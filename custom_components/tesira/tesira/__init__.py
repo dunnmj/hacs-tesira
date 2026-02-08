@@ -9,8 +9,12 @@ import asyncssh
 
 OK_RESPONSE = re.compile("^\\+OK ?(.*)\r\n")
 OK_RESPONSE_WITH_VALUE = re.compile('^\\+OK ("value".*)\r\n')
+OK_RESPONSE_RAW = re.compile("^\\+OK (.*)\r\n")
 VALUE_REGEX = re.compile('"value":(.*)')
 SUBSCRIPTION_REGEX = re.compile('^! "publishToken":"([^"]+)" "value":(.*)\r\n')
+ALIAS_LIST_REGEX = re.compile(r'"list":\[([^\]]*)\]')
+BLOCK_TYPE_REGEX = re.compile(r'"blockType":"([^"]+)"')
+CHANNEL_INFO_REGEX = re.compile(r'"channelInfo":\[([^\]]*)\]')
 
 
 class CommandFailedException(Exception):
@@ -134,7 +138,8 @@ class Tesira:
             if self._conn is None:
                 return
             self._process.close()
-            self._subscription_process.close()
+            if self._subscription_process is not None:
+                self._subscription_process.close()
             self._conn.close()
             self._conn = None
             self._process = None
@@ -156,6 +161,24 @@ class Tesira:
             self._subscription_process = await self._get_process(self._conn)
             for command in self._subscription_history:
                 self._subscription_process.stdin.write(command)
+
+    async def connect_command_only(self):
+        """Connect with only a command process (no subscription).
+
+        Used during config flow discovery where subscriptions are not needed.
+        """
+        async with self._connection_management_lock:
+            if self._conn is not None:
+                return
+            self._conn = await asyncssh.connect(
+                self._ip,
+                username=self._username,
+                password=self._password,
+                client_keys=None,
+                known_hosts=None,
+                keepalive_interval=10,
+            )
+            self._process = await self._get_process(self._conn)
 
     async def serial_number(self):
         serial = self.parse_value(
@@ -268,6 +291,16 @@ class Tesira:
         )
         return label[1:-1]
 
+    async def get_output_label(self, instance_id: str, output_number: int) -> str:
+        """Get the label for a specific output of a block."""
+        label = self.parse_value(
+            await self._send_command(
+                f'"{instance_id}" get outputLabel {output_number}',
+                expects_value=True,
+            )
+        )
+        return label[1:-1]
+
     async def get_router_output(self, router_id, output_index):
         """Get current input routed to specific output."""
         value = self.parse_value(
@@ -308,3 +341,64 @@ class Tesira:
     async def set_state(self, instance_id, state):
         """Set state on a logic state block."""
         await self._send_command(f'"{instance_id}" set state 1 {str(state).lower()}')
+
+    async def get_aliases(self) -> list[str]:
+        """Get all block instance IDs from the device."""
+        response = await self._send_command("SESSION get aliases", expects_value=False)
+        match = ALIAS_LIST_REGEX.search(response)
+        if not match:
+            return []
+        raw = match.group(1)
+        return re.findall(r'"([^"]+)"', raw)
+
+    async def get_block_info(self, instance_id: str) -> dict:
+        """Get block type and channel info for an instance ID.
+
+        Returns dict with 'block_type' and 'channel_info' keys.
+        """
+        response = await self._send_command(
+            f'"{instance_id}" get blockInfo', expects_value=False
+        )
+        result: dict[str, str | dict[str, int]] = {}
+
+        type_match = BLOCK_TYPE_REGEX.search(response)
+        if type_match:
+            result["block_type"] = type_match.group(1)
+
+        info_match = CHANNEL_INFO_REGEX.search(response)
+        if info_match:
+            channel_info: dict[str, int] = {}
+            for item in re.findall(r'"([^"]+)"', info_match.group(1)):
+                parts = item.split(":")
+                if len(parts) == 2:
+                    channel_info[parts[0].strip()] = int(parts[1].strip())
+            result["channel_info"] = channel_info
+
+        return result
+
+    async def discover_blocks(self) -> dict[str, list[dict]]:
+        """Discover all blocks and categorize them by type.
+
+        Returns dict mapping block type to list of block info dicts.
+        Each info dict has 'instance_id', 'block_type', and 'channel_info'.
+        """
+        aliases = await self.get_aliases()
+        blocks: dict[str, list[dict]] = {}
+
+        for instance_id in aliases:
+            if instance_id == "DEVICE":
+                continue
+            try:
+                info = await self.get_block_info(instance_id)
+                block_type = info.get("block_type", "Unknown")
+                entry = {
+                    "instance_id": instance_id,
+                    "block_type": block_type,
+                    "channel_info": info.get("channel_info", {}),
+                }
+                blocks.setdefault(block_type, []).append(entry)
+            except CommandFailedException:
+                logging.debug("Could not get block info for %s", instance_id)
+                continue
+
+        return blocks

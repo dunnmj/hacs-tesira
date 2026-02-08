@@ -1,15 +1,80 @@
 {
-    "services": {
-        "send_command": {
-            "description": "Sends a list of command strings to the Tesira device that the selected media player entity is part of.",
-            "fields": {
-                "command_strings": {
-                    "description": "List of command strings to send",
-                    "name": "Commands"
-                }
-            },
-            "name": "Send Command"
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Tesira",
+        "description": "Enter the connection details for your Biamp Tesira device. Blocks will be auto-discovered after connecting.",
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "username": "Username",
+          "password": "Password"
         }
+      },
+      "router": {
+        "title": "{router_name} — output {output_number} of {num_outputs}",
+        "description": "Select the level block to assign to output {output_number} of this router, or choose 'None' to skip this output.",
+        "data": {
+          "level_block": "Level block for output {output_number}"
+        },
+        "data_description": {
+          "level_block": "The level block that will control volume for output {output_number} of {router_name}."
+        }
+      },
+      "levels": {
+        "title": "Select level blocks",
+        "description": "Select any additional level blocks you want to add as controls. Blocks already assigned to routers are not shown.",
+        "data": {
+          "levels": "Level blocks"
+        }
+      }
     },
-    "title": "Tesira Control"
+    "error": {
+      "cannot_connect": "Failed to connect to the Tesira device. Please check the host, username, and password."
+    },
+    "abort": {
+      "already_configured": "This Tesira device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reconnecting",
+        "description": "Could not connect to the Tesira device to re-discover blocks."
+      },
+      "router": {
+        "title": "{router_name} — output {output_number} of {num_outputs}",
+        "description": "Select the level block to assign to output {output_number} of this router, or choose 'None' to skip this output.",
+        "data": {
+          "level_block": "Level block for output {output_number}"
+        },
+        "data_description": {
+          "level_block": "The level block that will control volume for output {output_number} of {router_name}."
+        }
+      },
+      "levels": {
+        "title": "Select level blocks",
+        "description": "Select any additional level blocks you want to add as controls. Blocks already assigned to routers are not shown.",
+        "data": {
+          "levels": "Level blocks"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Tesira device to re-discover blocks."
+    }
+  },
+  "services": {
+    "send_command": {
+      "description": "Sends a list of command strings to the Tesira device that the selected media player entity is part of.",
+      "fields": {
+        "command_strings": {
+          "description": "List of command strings to send",
+          "name": "Commands"
+        }
+      },
+      "name": "Send command"
+    }
+  },
+  "title": "Tesira Control"
 }

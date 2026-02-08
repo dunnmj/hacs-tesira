@@ -1,9 +1,10 @@
 {
   "domain": "tesira_ttp",
   "name": "Tesira Control",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "documentation": "https://github.com/dunnmj/hacs-tesira",
   "issue_tracker": "https://github.com/dunnmj/hacs-tesira/issues",
   "codeowners": ["@dunnmj"],
+  "config_flow": true,
   "requirements": ["asyncssh"]
 }
