@@ -241,7 +241,9 @@ class Tesira:
         """Get router input count and labels, return dict mapping labels to input numbers."""
         input_count = int(
             self.parse_value(
-                await self._send_command(f'"{instance_id}" get numInputs', expects_value=True)
+                await self._send_command(
+                    f'"{instance_id}" get numInputs', expects_value=True
+                )
             )
         )
         input_map = {}
@@ -301,6 +303,8 @@ class Tesira:
 
     async def set_level_mute(self, instance_id, mute):
         """Set mute state on Level block."""
-        await self._send_command(
-            f'"{instance_id}" set mute 1 {str(mute).lower()}'
-        )
+        await self._send_command(f'"{instance_id}" set mute 1 {str(mute).lower()}')
+
+    async def set_state(self, instance_id, state):
+        """Set state on a logic state block."""
+        await self._send_command(f'"{instance_id}" set state 1 {str(state).lower()}')
