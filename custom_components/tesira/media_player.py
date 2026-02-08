@@ -4,59 +4,26 @@ import math
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    PLATFORM_SCHEMA as MEDIA_PLAYER_PLATFORM_SCHEMA,
     MediaPlayerEntity,
     MediaPlayerState,
 )
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
-from homeassistant.const import CONF_IP_ADDRESS, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import get_name_from_instance_id, get_tesira
+from . import TesiraConfigEntry, get_name_from_instance_id
+from .const import (
+    CONF_LEVEL_BLOCKS,
+    CONF_ROUTERS,
+    CONF_ROUTER_ID,
+    CONF_SOURCE_SELECTORS,
+    SERVICE_NAME,
+)
 from .tesira import CommandFailedException, Tesira
 
-DOMAIN = "tesira_ttp"
-SERVICE_NAME = "send_command"
-
 _LOGGER = logging.getLogger(__name__)
-
-
-DEFAULT_PORT = 23
-
-CONF_SOURCE_SELECTORS = "source_selectors"
-CONF_ROUTERS = "routers"
-CONF_ROUTER_ID = "router_id"
-CONF_LEVEL_BLOCKS = "level_blocks"
-
-PLATFORM_SCHEMA = MEDIA_PLAYER_PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_IP_ADDRESS): cv.string,
-        vol.Required(CONF_USERNAME): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_NAME): cv.string,
-        vol.Required(CONF_SOURCE_SELECTORS): vol.All(
-            cv.ensure_list,
-            [cv.string],
-        ),
-        vol.Optional(CONF_ROUTERS): vol.All(
-            cv.ensure_list,
-            [
-                vol.Schema(
-                    {
-                        vol.Required(CONF_ROUTER_ID): cv.string,
-                        vol.Required(CONF_LEVEL_BLOCKS): vol.All(
-                            cv.ensure_list,
-                            [cv.string],
-                        ),
-                    }
-                )
-            ],
-        ),
-    }
-)
 
 
 async def send_command(entity, service_call):
@@ -65,22 +32,23 @@ async def send_command(entity, service_call):
         await entity.async_send_command(command)
 
 
-async def async_setup_platform(
-    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
-):
-    """Set up the Tesira platform."""
-    config = discovery_info
-    _LOGGER.debug("MediaPlayer: %s", config)
-    if (
-        config.get(CONF_SOURCE_SELECTORS, []) == []
-        and config.get(CONF_ROUTERS, []) == []
-    ):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: TesiraConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up Tesira media player entities from a config entry."""
+    tesira = entry.runtime_data
+    options = entry.options
+    serial = await tesira.serial_number()
+
+    source_selectors = options.get(CONF_SOURCE_SELECTORS, [])
+    router_configs = options.get(CONF_ROUTERS, [])
+
+    if not source_selectors and not router_configs:
         return
 
-    ip = config[CONF_IP_ADDRESS]
-    source_selector_instance_ids = config[CONF_SOURCE_SELECTORS]
     platform = entity_platform.async_get_current_platform()
-
     platform.async_register_entity_service(
         SERVICE_NAME,
         {
@@ -91,15 +59,14 @@ async def async_setup_platform(
         },
         send_command,
     )
-    t = await get_tesira(hass, ip, config[CONF_USERNAME], config[CONF_PASSWORD])
-    serial = await t.serial_number()
-    # _LOGGER.error("Serial number is %s", str(serial))
 
-    for instance_id in source_selector_instance_ids:
+    entities: list[MediaPlayerEntity] = []
+
+    for instance_id in source_selectors:
         try:
-            source_map = await t.sources(instance_id)
-            async_add_entities(
-                [await TesiraSourceSelector.new(t, instance_id, serial, source_map)]
+            source_map = await tesira.sources(instance_id)
+            entities.append(
+                await TesiraSourceSelector.new(tesira, instance_id, serial, source_map)
             )
         except CommandFailedException as e:
             _LOGGER.error(
@@ -107,36 +74,36 @@ async def async_setup_platform(
             )
             continue
 
-    # Setup router outputs
-    router_configs = config.get(CONF_ROUTERS, [])
-
     for router_config in router_configs:
         router_id = router_config[CONF_ROUTER_ID]
-        level_blocks = router_config[CONF_LEVEL_BLOCKS]
+        level_blocks = router_config.get(CONF_LEVEL_BLOCKS, [])
+
+        if not level_blocks:
+            continue
 
         try:
-            # Get available inputs for this router
-            input_map = await t.router_inputs(router_id)
+            input_map = await tesira.router_inputs(router_id)
 
-            # Create entity for each output (1-indexed for Tesira protocol)
             for output_index, level_id in enumerate(level_blocks, start=1):
-                # Derive output label from level instance tag (remove "Level" suffix)
-                output_label = get_name_from_instance_id(level_id)
-
-                # Create entity
+                if level_id:
+                    output_label = get_name_from_instance_id(level_id)
+                else:
+                    try:
+                        label = await tesira.get_output_label(router_id, output_index)
+                    except CommandFailedException:
+                        label = f"Output {output_index}"
+                    output_label = f"{get_name_from_instance_id(router_id)} {label}"
                 try:
-                    async_add_entities(
-                        [
-                            await TesiraRouterOutput.new(
-                                t,
-                                router_id,
-                                level_id,
-                                serial,
-                                output_index,
-                                input_map,
-                                output_label,
-                            )
-                        ]
+                    entities.append(
+                        await TesiraRouterOutput.new(
+                            tesira,
+                            router_id,
+                            level_id,
+                            serial,
+                            output_index,
+                            input_map,
+                            output_label,
+                        )
                     )
                 except CommandFailedException as e:
                     _LOGGER.error(
@@ -150,6 +117,8 @@ async def async_setup_platform(
         except CommandFailedException as e:
             _LOGGER.error("Error initializing router %s: %s", router_id, str(e))
             continue
+
+    async_add_entities(entities)
 
 
 class TesiraSourceSelector(MediaPlayerEntity):
@@ -237,13 +206,8 @@ class TesiraSourceSelector(MediaPlayerEntity):
 
 
 class TesiraRouterOutput(MediaPlayerEntity):
-    """Representation of a Tesira Router Output with Level control."""
+    """Representation of a Tesira Router Output with optional Level control."""
 
-    _attr_supported_features = (
-        MediaPlayerEntityFeature.SELECT_SOURCE
-        | MediaPlayerEntityFeature.VOLUME_MUTE
-        | MediaPlayerEntityFeature.VOLUME_SET
-    )
     _attr_should_poll = False
 
     def __init__(
@@ -261,7 +225,18 @@ class TesiraRouterOutput(MediaPlayerEntity):
         self._router_id = router_id
         self._level_id = level_id
         self._output_index = output_index
-        self._attr_unique_id = f"{serial_number}_{router_id.replace(' ', '_')}_output_{output_index}_{level_id.replace(' ', '_')}"
+        if level_id:
+            self._attr_unique_id = f"{serial_number}_{router_id.replace(' ', '_')}_output_{output_index}_{level_id.replace(' ', '_')}"
+            self._attr_supported_features = (
+                MediaPlayerEntityFeature.SELECT_SOURCE
+                | MediaPlayerEntityFeature.VOLUME_MUTE
+                | MediaPlayerEntityFeature.VOLUME_SET
+            )
+        else:
+            self._attr_unique_id = (
+                f"{serial_number}_{router_id.replace(' ', '_')}_output_{output_index}"
+            )
+            self._attr_supported_features = MediaPlayerEntityFeature.SELECT_SOURCE
         self._input_map = input_map
         self._attr_source_list = list(input_map.keys())
         self._attr_source = self._attr_source_list[0]
@@ -299,11 +274,12 @@ class TesiraRouterOutput(MediaPlayerEntity):
             else:
                 self._attr_source = "Unknown"
 
-            current_level = await tesira.get_level(level_id)
-            self._attr_volume_level = self.db_to_volume(current_level)
+            if level_id:
+                current_level = await tesira.get_level(level_id)
+                self._attr_volume_level = self.db_to_volume(current_level)
 
-            current_mute = await tesira.get_mute(level_id)
-            self._attr_is_volume_muted = current_mute
+                current_mute = await tesira.get_mute(level_id)
+                self._attr_is_volume_muted = current_mute
         except CommandFailedException as e:
             _LOGGER.error(
                 "Error getting initial state for router %s output %d: %s",
@@ -316,8 +292,9 @@ class TesiraRouterOutput(MediaPlayerEntity):
         await tesira.subscribe(
             router_id, f"input {output_index}", self._routing_callback
         )
-        await tesira.subscribe(level_id, "level 1", self._volume_callback)
-        await tesira.subscribe(level_id, "mute 1", self._mute_callback)
+        if level_id:
+            await tesira.subscribe(level_id, "level 1", self._volume_callback)
+            await tesira.subscribe(level_id, "mute 1", self._mute_callback)
 
         return self
 

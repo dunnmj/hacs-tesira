@@ -2,15 +2,13 @@
 
 Control **Biamp Tesira** DSP systems from Home Assistant using the Tesira Text Protocol.
 
-This is a **YAML-configured integration** (no Config Flow / UI setup).
-
 ---
 
 ## Overview
 
 - **Domain:** `tesira_ttp`
 - **Platforms:** `media_player`, `switch`, `number`, `binary_sensor`
-- **Configuration:** `configuration.yaml`
+- **Configuration:** UI config flow with auto-discovery
 - **Connection:** SSH (via `asyncssh`)
 - **Protocol:** Tesira Text Protocol Server
 - **Action:** `tesira_ttp.send_command`
@@ -24,6 +22,7 @@ The integration maintains:
 
 ## Features
 
+- **Auto-discovery** of all supported block types on the Tesira device
 - Source selection via `media_player`
 - Volume and mute control
 - Router output control with volume and mute per zone
@@ -33,6 +32,7 @@ The integration maintains:
 - Logic meter binary sensors (read-only monitoring of Tesira logic meter blocks)
 - Real-time updates using Tesira publish subscriptions
 - Raw command service for advanced/custom control
+- Options flow to reconfigure blocks without removing the integration
 
 ---
 
@@ -49,56 +49,58 @@ The integration maintains:
 
 ---
 
-## Configuration (YAML only)
+## Configuration (UI)
 
-This integration is configured entirely in `configuration.yaml`.
+This integration is configured entirely through the Home Assistant UI.
 
-> ⚠️ Changes to configuration require a Home Assistant restart.
+### Adding the integration
 
-### Example configuration
+1. Go to **Settings** → **Devices & services** → **Add integration**
+2. Search for **Tesira Control**
+3. Enter connection details:
+   - **Name**: A friendly name for this Tesira device
+   - **Host**: IP address or hostname of the Tesira device
+   - **Username**: SSH username
+   - **Password**: SSH password (leave blank if not required)
+4. The integration connects and **auto-discovers** all supported blocks on the device
 
-```yaml
-tesira_ttp:
-  - name: "Tesira DSP"
-    ip_address: 192.168.1.50
-    username: "admin"
-    password: "your_password"
-    source_selectors:
-      - "Lounge - Source Selector"
-      - "Bar - Source Selector"
-    mutes:
-      - "Lounge - Mutes"
-      - "Bar - Mutes"
-    levels:
-      - "Lounge - Level"
-      - "Bar - Level"
-    logic_states:
-      - "Lounge - Logic State"
-    logic_meters:
-      - "Presence - Logic Meter"
-    routers:
-      - router_id: "Studio - Router"
-        level_blocks:
-          - "Studio Upper - Level"
-          - "Studio Lower - Level"
-```
+> **Default credentials:**
+>
+> - **Unprotected Tesira**: username `default`, password blank
+> - **Protected Tesira**: username `admin`, password as set on the device
 
-### Configuration options
+### Auto-discovered block types
 
-Each item under `tesira_ttp:` supports:
+The following block types are discovered and added automatically — no user action required:
 
-| Key              | Required | Description                                                                         |
-| ---------------- | -------- | ----------------------------------------------------------------------------------- |
-| name             | ✅       | Friendly name for this Tesira config block                                          |
-| ip_address       | ✅       | IP address or hostname of the Tesira device                                         |
-| username         | ✅       | SSH username                                                                        |
-| password         | ✅       | SSH password                                                                        |
-| source_selectors | ✅       | List of Source Selector instance IDs to expose as `media_player` entities           |
-| mutes            | ❌       | List of Mute Block instance IDs used to create per-channel mute switches            |
-| levels           | ❌       | List of Level Block instance IDs to expose as `number` entities (percentage slider) |
-| logic_states     | ❌       | List of Logic State instance IDs to expose as `switch` entities                     |
-| logic_meters     | ❌       | List of Logic Meter instance IDs to expose as read-only `binary_sensor` entities    |
-| routers          | ❌       | List of Router configurations (see Router Outputs section below)                    |
+| Block type      | Platform        | Description                           |
+| --------------- | --------------- | ------------------------------------- |
+| Source Selector | `media_player`  | Source selection with volume and mute |
+| Mute Control    | `switch`        | Per-channel mute switches             |
+| Logic State     | `switch`        | On/off control switches               |
+| Logic Meter     | `binary_sensor` | Read-only state monitoring            |
+
+### Router configuration
+
+If routers are discovered, you are walked through each router **one output at a time**:
+
+1. For each output, select a **Level block** to assign (or choose "None" to skip)
+2. Assigned level blocks are removed from the available list for subsequent outputs
+3. Each assigned output becomes a `media_player` entity with source routing, volume, and mute
+
+### Level block selection
+
+After router configuration (or immediately if no routers exist), you can select **standalone Level blocks** to add as `number` entities. Blocks already assigned to routers are not shown.
+
+### Reconfiguring
+
+To change block assignments after setup:
+
+1. Go to **Settings** → **Devices & services** → **Tesira Control**
+2. Click **Configure**
+3. The integration re-discovers blocks and walks you through router and level selection again
+
+> Changes take effect immediately — no restart required.
 
 ---
 
@@ -106,7 +108,7 @@ Each item under `tesira_ttp:` supports:
 
 ### Media Player (`media_player`)
 
-A `media_player` entity is created for each instance ID listed under `source_selectors`.
+A `media_player` entity is created for each discovered Source Selector block.
 
 Supported features:
 
@@ -126,16 +128,12 @@ for real-time state updates.
 
 ### Router Outputs (`media_player`)
 
-Router outputs provide zone-based routing with independent volume and mute control.
+Router outputs provide zone-based routing with optional volume and mute control.
 
-**Configuration Structure:**
+A `media_player` entity is created for **every** router output. The Level blocks are mapped to router outputs in order (first Level block = output 1, second = output 2, etc.).
 
-Each router configuration requires:
-
-- **router_id**: The instance ID of the Router block in Tesira
-- **level_blocks**: A list of Level block instance IDs (one per output zone)
-
-The integration creates one `media_player` entity for each Level block in the list. The Level blocks are mapped to Router outputs in order (first Level block = output 1, second = output 2, etc.).
+- **With a Level block assigned**: The entity supports source selection, volume control, and mute
+- **Without a Level block** (skipped during setup): The entity supports source selection only — no volume or mute controls
 
 **Important:** Router blocks in Tesira use:
 
@@ -147,32 +145,8 @@ This is different from Source Selectors which are 1-indexed for both sources and
 **What each entity controls:**
 
 - **Source selection**: Routes any Router input to that specific output
-- **Volume control**: Adjusts the Level block volume in dB
-- **Mute control**: Mutes/unmutes the Level block
-
-**Example:**
-
-```yaml
-tesira_ttp:
-  - name: "Tesira DSP"
-    ip_address: 192.168.1.50
-    username: "admin"
-    password: "password"
-    source_selectors:
-      - "MainSourceSelector"
-    routers:
-      - router_id: "ZoneRouter"
-        level_blocks:
-          - "Zone1Level"
-          - "Zone2Level"
-          - "Zone3Level"
-```
-
-This creates 3 media_player entities:
-
-- Each controls routing from the ZoneRouter inputs to its respective output
-- Each has independent volume and mute control via its Level block
-- Entity names are derived from the Level block labels in Tesira
+- **Volume control** _(with Level block only)_: Adjusts the Level block volume in dB
+- **Mute control** _(with Level block only)_: Mutes/unmutes the Level block
 
 **Real-time updates:**
 
@@ -188,7 +162,7 @@ All three subscriptions work together to provide complete zone control.
 
 ### Number (`number`)
 
-A `number` entity is created for each instance ID listed under `levels`.
+A `number` entity is created for each Level block selected during setup (standalone, not assigned to a router).
 
 Each entity exposes a Tesira Level block as a percentage slider (0–100%). The dB-to-percentage conversion uses the same logarithmic scale as the media player volume controls.
 
@@ -203,25 +177,13 @@ The integration subscribes to:
 
 for real-time state updates.
 
-**Example:**
-
-```yaml
-tesira_ttp:
-  - name: "Tesira DSP"
-    ip_address: 192.168.1.50
-    username: "admin"
-    password: "password"
-    source_selectors: []
-    levels:
-      - "01 - Lounge Level"
-      - "02 - Bar Level"
-```
-
 ---
 
 ### Switch (`switch`)
 
-For each instance ID listed under `mutes`, the integration:
+#### Mute switches
+
+For each discovered Mute Control block, the integration:
 
 - Queries the mute block
 - Discovers the number of channels
@@ -229,11 +191,9 @@ For each instance ID listed under `mutes`, the integration:
 
 Each switch controls the channel mute state directly.
 
----
+#### Logic State switches
 
-### Switch — Logic States (`switch`)
-
-A `switch` entity is created for each instance ID listed under `logic_states`.
+A `switch` entity is created for each discovered Logic State block.
 
 These control Tesira Logic State blocks. Only channel 1 is supported — multi-channel logic state blocks are not. Turning the switch on sets the state to `true`, turning it off sets it to `false`.
 
@@ -243,25 +203,11 @@ The integration subscribes to:
 
 for real-time state updates.
 
-**Example:**
-
-```yaml
-tesira_ttp:
-  - name: "Tesira DSP"
-    ip_address: 192.168.1.50
-    username: "admin"
-    password: "password"
-    source_selectors: []
-    logic_states:
-      - "Lounge - Logic State"
-      - "Bar - Logic State"
-```
-
 ---
 
 ### Binary Sensor — Logic Meters (`binary_sensor`)
 
-A `binary_sensor` entity is created for each instance ID listed under `logic_meters`.
+A `binary_sensor` entity is created for each discovered Logic Meter block.
 
 These provide read-only monitoring of Tesira Logic Meter blocks. Only channel 1 is supported — multi-channel logic meter blocks are not. The sensor is `on` when the meter value is `true` and `off` when `false`.
 
@@ -271,52 +217,45 @@ The integration subscribes to:
 
 for real-time state updates.
 
-**Example:**
-
-```yaml
-tesira_ttp:
-  - name: "Tesira DSP"
-    ip_address: 192.168.1.50
-    username: "admin"
-    password: "password"
-    source_selectors: []
-    logic_meters:
-      - "Presence - Logic Meter"
-      - "Fault - Logic Meter"
-```
-
 ---
 
-## Entity Naming Behavior (Important!)
+## Entity Naming Behavior
 
-Entity names are derived from the instance ID you provide in YAML, not queried from Tesira.
+Entity names are derived from the Tesira block instance ID.
 
-Naming rule:
+Naming rules:
 
-- If the instance ID contains `"-"`, everything **before** the last `"-"` is used (with whitespace trimmed)
-- Otherwise, the full instance ID is used
+1. If the instance ID contains `"-"`, everything **before the last** `"-"` is used (with whitespace trimmed)
+2. If the instance ID has **no** `"-"`, known block type suffixes (e.g. `SourceSelector`, `Level`, `MuteControl`, `Router`, `LogicState`, `LogicMeter`) are stripped, and the remaining camelCase text is split into separate words
 
 Examples:
 
-| Instance ID                   | Entity Name              |
-| ----------------------------- | ------------------------ |
-| `01 - Lounge Source Selector` | `01`                     |
-| `Source - Office`             | `Source`                 |
-| `Zone 1 - Level`              | `Zone 1`                 |
-| `MainRoomSourceSelector`      | `MainRoomSourceSelector` |
+| Instance ID                   | Entity Name |
+| ----------------------------- | ----------- |
+| `01 - Lounge Source Selector` | `01`        |
+| `Source - Office`             | `Source`    |
+| `Zone 1 - Level`              | `Zone 1`    |
+| `MainRoomSourceSelector`      | `Main Room` |
+| `BarSourceSelector`           | `Bar`       |
+| `LoungeLevel`                 | `Lounge`    |
 
 You control entity naming by how you name your Tesira blocks.
 
 ### Router output entity names
 
-Router output entities are named after their associated Level block, using the same naming rule above. The router instance ID itself is not used in the entity name.
+Router output entity naming depends on whether a Level block was assigned:
+
+- **With a Level block**: Named after the Level block's instance ID, using the standard naming rules above
+- **Without a Level block**: Named using the router's instance ID (via standard naming rules) combined with the output label fetched from Tesira
 
 Examples:
 
-| Level Block Instance ID | Entity Name    |
-| ----------------------- | -------------- |
-| `Studio Upper - Level`  | `Studio Upper` |
-| `Zone1Level`            | `Zone1Level`   |
+| Router Instance ID | Level Block            | Output Label | Entity Name     |
+| ------------------ | ---------------------- | ------------ | --------------- |
+| `Studio - Router`  | `Studio Upper - Level` | —            | `Studio Upper`  |
+| `Studio - Router`  | _(none)_               | `Zone 3`     | `Studio Zone 3` |
+| `ZoneRouter`       | `Zone1Level`           | —            | `Zone1`         |
+| `ZoneRouter`       | _(none)_               | `Patio`      | `Zone Patio`    |
 
 ### Switch entity names (mute channels)
 
@@ -325,18 +264,11 @@ Switch names are a combination of:
 1. The cleaned instance ID (same logic as above)
 2. The channel label fetched directly from Tesira
 
-Format:
+Format: `<Instance Name> - <Input Label>`
 
-`<Instance Name> - <Input Label>`
-
-Example:
-
-`01 - Mic 1`
-`01 - Lectern`
+Example: `01 - Mic 1`, `01 - Lectern`
 
 Channel labels come directly from the Tesira configuration.
-
----
 
 ### Media player source names
 
@@ -395,18 +327,23 @@ Restart Home Assistant, reproduce the issue, and include logs when opening issue
 
 **No entities appear**
 
-- Ensure `source_selectors` is defined (required)
-- Verify instance IDs exactly match Tesira block instance IDs
+- Ensure the Tesira device has blocks with supported types (Source Selector, Router, Level, Mute Control, Logic State, Logic Meter)
+- Verify the integration connected successfully (check the integration card for errors)
 
 **Switches missing**
 
-- `mutes` is optional
-- Input blocks must expose channel labels
+- Mute Control blocks must expose channel labels
+- Logic State blocks are auto-discovered — check that they exist in your Tesira configuration
 
 **Level sliders missing**
 
-- `levels` is optional
-- Instance IDs must exactly match Level block instance IDs in Tesira
+- Level blocks must be selected during setup or assigned to a router output
+- Use **Configure** on the integration card to re-run block selection
+
+**Router entities missing**
+
+- Level blocks must be assigned to router outputs during setup
+- Ensure the router block has outputs configured in Tesira
 
 **Connection issues**
 
@@ -430,6 +367,5 @@ Contributions and improvements welcome.
 
 Please open GitHub issues and include:
 
-- your YAML configuration (with secrets removed)
 - relevant debug logs
 - Tesira firmware version and block instance IDs
