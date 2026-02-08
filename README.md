@@ -9,7 +9,7 @@ This is a **YAML-configured integration** (no Config Flow / UI setup).
 ## Overview
 
 - **Domain:** `tesira_ttp`
-- **Platforms:** `media_player`, `switch`, `number`
+- **Platforms:** `media_player`, `switch`, `number`, `binary_sensor`
 - **Configuration:** `configuration.yaml`
 - **Connection:** SSH (via `asyncssh`)
 - **Protocol:** Tesira Text Protocol Server
@@ -29,6 +29,8 @@ The integration maintains:
 - Router output control with volume and mute per zone
 - Standalone level control via `number` entities (percentage slider)
 - Per-channel mute switches
+- Logic state switches (on/off control of Tesira logic state blocks)
+- Logic meter binary sensors (read-only monitoring of Tesira logic meter blocks)
 - Real-time updates using Tesira publish subscriptions
 - Raw command service for advanced/custom control
 
@@ -70,6 +72,10 @@ tesira_ttp:
     levels:
       - "Lounge - Level"
       - "Bar - Level"
+    logic_states:
+      - "Lounge - Logic State"
+    logic_meters:
+      - "Presence - Logic Meter"
     routers:
       - router_id: "Studio - Router"
         level_blocks:
@@ -90,6 +96,8 @@ Each item under `tesira_ttp:` supports:
 | source_selectors | ✅       | List of Source Selector instance IDs to expose as `media_player` entities           |
 | mutes            | ❌       | List of Mute Block instance IDs used to create per-channel mute switches            |
 | levels           | ❌       | List of Level Block instance IDs to expose as `number` entities (percentage slider) |
+| logic_states     | ❌       | List of Logic State instance IDs to expose as `switch` entities                     |
+| logic_meters     | ❌       | List of Logic Meter instance IDs to expose as read-only `binary_sensor` entities    |
 | routers          | ❌       | List of Router configurations (see Router Outputs section below)                    |
 
 ---
@@ -220,6 +228,62 @@ For each instance ID listed under `mutes`, the integration:
 - Creates one mute switch per channel
 
 Each switch controls the channel mute state directly.
+
+---
+
+### Switch — Logic States (`switch`)
+
+A `switch` entity is created for each instance ID listed under `logic_states`.
+
+These control Tesira Logic State blocks. Only channel 1 is supported — multi-channel logic state blocks are not. Turning the switch on sets the state to `true`, turning it off sets it to `false`.
+
+The integration subscribes to:
+
+- `state 1`
+
+for real-time state updates.
+
+**Example:**
+
+```yaml
+tesira_ttp:
+  - name: "Tesira DSP"
+    ip_address: 192.168.1.50
+    username: "admin"
+    password: "password"
+    source_selectors: []
+    logic_states:
+      - "Lounge - Logic State"
+      - "Bar - Logic State"
+```
+
+---
+
+### Binary Sensor — Logic Meters (`binary_sensor`)
+
+A `binary_sensor` entity is created for each instance ID listed under `logic_meters`.
+
+These provide read-only monitoring of Tesira Logic Meter blocks. Only channel 1 is supported — multi-channel logic meter blocks are not. The sensor is `on` when the meter value is `true` and `off` when `false`.
+
+The integration subscribes to:
+
+- `state 1`
+
+for real-time state updates.
+
+**Example:**
+
+```yaml
+tesira_ttp:
+  - name: "Tesira DSP"
+    ip_address: 192.168.1.50
+    username: "admin"
+    password: "password"
+    source_selectors: []
+    logic_meters:
+      - "Presence - Logic Meter"
+      - "Fault - Logic Meter"
+```
 
 ---
 
