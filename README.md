@@ -97,7 +97,7 @@ If routers are discovered, you first select which routers to configure, then eac
 
 After router configuration (or immediately if no routers exist), you can select **standalone Level blocks** to add as `number` entities. Blocks already assigned to routers are not shown.
 
-### Reconfiguring
+### Reconfiguring blocks
 
 To change block assignments after setup:
 
@@ -106,6 +106,17 @@ To change block assignments after setup:
 3. The integration re-discovers blocks and walks you through block selection again
 
 > Changes take effect immediately — no restart required.
+
+### Reconfiguring connection
+
+To change the host, username, or password:
+
+1. Go to **Settings** → **Devices & services** → **Tesira Control**
+2. Open the menu (⋮) → **Reconfigure**
+3. Update the connection details
+4. The integration tests the connection before saving
+
+> The integration reloads automatically after a successful update.
 
 ---
 

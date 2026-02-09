@@ -63,13 +63,23 @@
         "data": {
           "logic_meters": "Logic meter blocks"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure connection",
+        "description": "Update the connection details for this Tesira device.",
+        "data": {
+          "host": "Host",
+          "username": "Username",
+          "password": "Password"
+        }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to the Tesira device. Please check the host, username, and password."
     },
     "abort": {
-      "already_configured": "This Tesira device is already configured."
+      "already_configured": "This Tesira device is already configured.",
+      "reconfigure_successful": "Connection details updated successfully."
     }
   },
   "options": {

@@ -407,6 +407,52 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return TesiraOptionsFlow()
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle reconfiguration of connection details."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            host = user_input[CONF_HOST]
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+
+            try:
+                tesira = Tesira(host, username, password)
+                await tesira.connect_command_only()
+            except Exception:
+                errors["base"] = "cannot_connect"
+            else:
+                await tesira.invalidate_connection()
+
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_HOST: host,
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST, "")): str,
+                    vol.Required(
+                        CONF_USERNAME, default=entry.data.get(CONF_USERNAME, "")
+                    ): str,
+                    vol.Optional(
+                        CONF_PASSWORD, default=entry.data.get(CONF_PASSWORD, "")
+                    ): str,
+                }
+            ),
+            errors=errors,
+        )
+
 
 class TesiraOptionsFlow(OptionsFlow):
     """Handle options flow for Tesira Control.
