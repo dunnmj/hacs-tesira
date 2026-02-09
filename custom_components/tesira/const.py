@@ -22,12 +22,4 @@ BLOCK_TYPE_MUTE = "Mute Control"
 BLOCK_TYPE_LOGIC_STATE = "Logic State"
 BLOCK_TYPE_LOGIC_METER = "Logic Meter"
 
-# Supported block types for auto-discovery
-AUTO_ADD_BLOCK_TYPES = {
-    BLOCK_TYPE_SOURCE_SELECTOR,
-    BLOCK_TYPE_LOGIC_STATE,
-    BLOCK_TYPE_LOGIC_METER,
-    BLOCK_TYPE_MUTE,
-}
-
 SERVICE_NAME = "send_command"
