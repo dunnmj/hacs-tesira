@@ -150,9 +150,9 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="source_selectors",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_SOURCE_SELECTORS, default=list(available)
-                    ): cv.multi_select(options),
+                    vol.Optional(CONF_SOURCE_SELECTORS, default=[]): cv.multi_select(
+                        options
+                    ),
                 }
             ),
         )
@@ -184,9 +184,7 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="select_routers",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_ROUTERS, default=list(available)
-                    ): cv.multi_select(options),
+                    vol.Optional(CONF_ROUTERS, default=[]): cv.multi_select(options),
                 }
             ),
         )
@@ -323,9 +321,7 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="mutes",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_MUTES, default=list(available)): cv.multi_select(
-                        options
-                    ),
+                    vol.Optional(CONF_MUTES, default=[]): cv.multi_select(options),
                 }
             ),
         )
@@ -352,9 +348,9 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="logic_states",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_LOGIC_STATES, default=list(available)
-                    ): cv.multi_select(options),
+                    vol.Optional(CONF_LOGIC_STATES, default=[]): cv.multi_select(
+                        options
+                    ),
                 }
             ),
         )
@@ -381,9 +377,9 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="logic_meters",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_LOGIC_METERS, default=list(available)
-                    ): cv.multi_select(options),
+                    vol.Optional(CONF_LOGIC_METERS, default=[]): cv.multi_select(
+                        options
+                    ),
                 }
             ),
         )
