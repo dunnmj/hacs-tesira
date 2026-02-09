@@ -22,7 +22,7 @@ The integration maintains:
 
 ## Features
 
-- **Auto-discovery** of all supported block types on the Tesira device
+- **Auto-discovery** of all supported block types with per-type selection
 - Source selection via `media_player`
 - Volume and mute control
 - Router output control with volume and mute per zone
@@ -69,38 +69,54 @@ This integration is configured entirely through the Home Assistant UI.
 > - **Unprotected Tesira**: username `default`, password blank
 > - **Protected Tesira**: username `admin`, password as set on the device
 
-### Auto-discovered block types
+### Block selection
 
-The following block types are discovered and added automatically — no user action required:
+After connecting, the integration discovers all supported block types and walks you through selecting which blocks to add. Each block type is presented on its own step — deselect any blocks you don't need:
 
-| Block type      | Platform        | Description                           |
-| --------------- | --------------- | ------------------------------------- |
-| Source Selector | `media_player`  | Source selection with volume and mute |
-| Mute Control    | `switch`        | Per-channel mute switches             |
-| Logic State     | `switch`        | On/off control switches               |
-| Logic Meter     | `binary_sensor` | Read-only state monitoring            |
+| Step               | Block type      | Platform        | Description                           |
+| ------------------ | --------------- | --------------- | ------------------------------------- |
+| Source selectors   | Source Selector | `media_player`  | Source selection with volume and mute |
+| Router outputs     | Router          | `media_player`  | Zone routing with optional volume     |
+| Level blocks       | Level           | `number`        | Standalone level control (0–100%)     |
+| Mute blocks        | Mute Control    | `switch`        | Per-channel mute switches             |
+| Logic state blocks | Logic State     | `switch`        | On/off control switches               |
+| Logic meter blocks | Logic Meter     | `binary_sensor` | Read-only state monitoring            |
+
+Steps are skipped automatically when no blocks of that type are found on the device.
 
 ### Router configuration
 
-If routers are discovered, you are walked through each router **one output at a time**:
+If routers are discovered, you first select which routers to configure, then each selected router is walked through **one output at a time**:
 
-1. For each output, select a **Level block** to assign (or choose "None" to skip)
-2. Assigned level blocks are removed from the available list for subsequent outputs
-3. Each assigned output becomes a `media_player` entity with source routing, volume, and mute
+1. Select which **Router blocks** to add
+2. For each selected router, assign a **Level block** to each output (or choose "None" to skip)
+3. Assigned level blocks are removed from the available list for subsequent outputs
+4. Each assigned output becomes a `media_player` entity with source routing, volume, and mute
 
 ### Level block selection
 
 After router configuration (or immediately if no routers exist), you can select **standalone Level blocks** to add as `number` entities. Blocks already assigned to routers are not shown.
 
-### Reconfiguring
+### Reconfiguring blocks
 
 To change block assignments after setup:
 
 1. Go to **Settings** → **Devices & services** → **Tesira Control**
 2. Click **Configure**
-3. The integration re-discovers blocks and walks you through router and level selection again
+3. The integration re-discovers blocks and walks you through block selection again
 
 > Changes take effect immediately — no restart required.
+
+### Reconfiguring connection
+
+To change the host, username, or password:
+
+1. Go to **Settings** → **Devices & services** → **Tesira Control**
+2. Open the menu (⋮) → **Reconfigure**
+3. Update the connection details
+4. The integration tests the connection before saving
+
+> The integration reloads automatically after a successful update.
 
 ---
 
@@ -226,18 +242,24 @@ Entity names are derived from the Tesira block instance ID.
 Naming rules:
 
 1. If the instance ID contains `"-"`, everything **before the last** `"-"` is used (with whitespace trimmed)
-2. If the instance ID has **no** `"-"`, known block type suffixes (e.g. `SourceSelector`, `Level`, `MuteControl`, `Router`, `LogicState`, `LogicMeter`) are stripped, and the remaining camelCase text is split into separate words
+2. If the instance ID has **no** `"-"`, known block type suffixes (e.g. `SourceSelector`, `Level`, `MuteControl`, `Router`, `LogicState`, `LogicMeter`) are stripped, and the remaining text is split into separate words using these boundary rules:
+   - **camelCase** — lowercase followed by uppercase (`mainRoom` → `main Room`)
+   - **Consecutive capitals** — kept together until the next lowercase-starting word (`TheWRBar` → `The WR Bar`)
+   - **Digit/letter boundaries** — digits and letters are separated (`Zone1House` → `Zone 1 House`)
 
 Examples:
 
-| Instance ID                   | Entity Name |
-| ----------------------------- | ----------- |
-| `01 - Lounge Source Selector` | `01`        |
-| `Source - Office`             | `Source`    |
-| `Zone 1 - Level`              | `Zone 1`    |
-| `MainRoomSourceSelector`      | `Main Room` |
-| `BarSourceSelector`           | `Bar`       |
-| `LoungeLevel`                 | `Lounge`    |
+| Instance ID                   | Entity Name    |
+| ----------------------------- | -------------- |
+| `01 - Lounge Source Selector` | `01`           |
+| `Source - Office`             | `Source`       |
+| `Zone 1 - Level`              | `Zone 1`       |
+| `MainRoomSourceSelector`      | `Main Room`    |
+| `BarSourceSelector`           | `Bar`          |
+| `LoungeLevel`                 | `Lounge`       |
+| `TheWRBarLevel`               | `The WR Bar`   |
+| `Main1HouseLevel`             | `Main 1 House` |
+| `Zone1Level`                  | `Zone 1`       |
 
 You control entity naming by how you name your Tesira blocks.
 
@@ -246,16 +268,16 @@ You control entity naming by how you name your Tesira blocks.
 Router output entity naming depends on whether a Level block was assigned:
 
 - **With a Level block**: Named after the Level block's instance ID, using the standard naming rules above
-- **Without a Level block**: Named using the router's instance ID (via standard naming rules) combined with the output label fetched from Tesira
+- **Without a Level block**: Named using the router's instance ID (via standard naming rules) combined with the output label fetched from Tesira, separated by `-`
 
 Examples:
 
-| Router Instance ID | Level Block            | Output Label | Entity Name     |
-| ------------------ | ---------------------- | ------------ | --------------- |
-| `Studio - Router`  | `Studio Upper - Level` | —            | `Studio Upper`  |
-| `Studio - Router`  | _(none)_               | `Zone 3`     | `Studio Zone 3` |
-| `ZoneRouter`       | `Zone1Level`           | —            | `Zone1`         |
-| `ZoneRouter`       | _(none)_               | `Patio`      | `Zone Patio`    |
+| Router Instance ID | Level Block            | Output Label | Entity Name       |
+| ------------------ | ---------------------- | ------------ | ----------------- |
+| `Studio - Router`  | `Studio Upper - Level` | —            | `Studio Upper`    |
+| `Studio - Router`  | _(none)_               | `Zone 3`     | `Studio - Zone 3` |
+| `ZoneRouter`       | `Zone1Level`           | —            | `Zone 1`          |
+| `ZoneRouter`       | _(none)_               | `Patio`      | `Zone - Patio`    |
 
 ### Switch entity names (mute channels)
 
@@ -333,7 +355,7 @@ Restart Home Assistant, reproduce the issue, and include logs when opening issue
 **Switches missing**
 
 - Mute Control blocks must expose channel labels
-- Logic State blocks are auto-discovered — check that they exist in your Tesira configuration
+- Logic State blocks must be selected during setup — check that they exist in your Tesira configuration
 
 **Level sliders missing**
 

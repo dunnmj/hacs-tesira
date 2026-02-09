@@ -58,6 +58,11 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
         self._assigned_levels: set[str] = set()
         self._connection_data: dict[str, str] = {}
         self._serial: int = 0
+        self._selected_source_selectors: list[str] = []
+        self._selected_routers: list[str] = []
+        self._selected_mutes: list[str] = []
+        self._selected_logic_states: list[str] = []
+        self._selected_logic_meters: list[str] = []
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -108,12 +113,7 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._current_router_index = 0
                 self._assigned_levels = set()
 
-                # If routers exist, go to router config steps
-                if self._routers:
-                    return await self.async_step_router()
-
-                # Otherwise go straight to level selection
-                return await self.async_step_levels()
+                return await self.async_step_source_selectors()
 
         return self.async_show_form(
             step_id="user",
@@ -126,6 +126,67 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+        )
+
+    async def async_step_source_selectors(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle source selector block selection."""
+        if user_input is not None:
+            self._selected_source_selectors = user_input.get(CONF_SOURCE_SELECTORS, [])
+            return await self.async_step_select_routers()
+
+        available = [
+            b["instance_id"]
+            for b in self._discovered_blocks.get(BLOCK_TYPE_SOURCE_SELECTOR, [])
+        ]
+
+        if not available:
+            return await self.async_step_select_routers()
+
+        options = {sid: sid for sid in available}
+
+        return self.async_show_form(
+            step_id="source_selectors",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_SOURCE_SELECTORS, default=[]): cv.multi_select(
+                        options
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_select_routers(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle router block selection."""
+        if user_input is not None:
+            self._selected_routers = user_input.get(CONF_ROUTERS, [])
+            # Filter routers to only selected ones
+            self._routers = [
+                r for r in self._routers if r["instance_id"] in self._selected_routers
+            ]
+            if self._routers:
+                return await self.async_step_router()
+            return await self.async_step_levels()
+
+        available = [
+            b["instance_id"] for b in self._discovered_blocks.get(BLOCK_TYPE_ROUTER, [])
+        ]
+
+        if not available:
+            return await self.async_step_levels()
+
+        options = {rid: rid for rid in available}
+
+        return self.async_show_form(
+            step_id="select_routers",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_ROUTERS, default=[]): cv.multi_select(options),
+                }
+            ),
         )
 
     async def _advance_to_next_router(self) -> ConfigFlowResult:
@@ -214,8 +275,8 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle standalone level block selection."""
         if user_input is not None:
-            selected_levels = user_input.get(CONF_LEVELS, [])
-            return self._create_entry(selected_levels)
+            self._selected_levels = user_input.get(CONF_LEVELS, [])
+            return await self.async_step_mutes()
 
         # Available level blocks not assigned to routers
         available_levels = [
@@ -223,8 +284,8 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
         ]
 
         if not available_levels:
-            # No levels to select, create entry immediately
-            return self._create_entry([])
+            self._selected_levels = []
+            return await self.async_step_mutes()
 
         level_options = {lid: lid for lid in available_levels}
 
@@ -239,31 +300,98 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    def _create_entry(self, selected_levels: list[str]) -> ConfigFlowResult:
-        """Create the config entry with all discovered and selected blocks."""
-        # Auto-added blocks
-        source_selectors = [
-            b["instance_id"]
-            for b in self._discovered_blocks.get(BLOCK_TYPE_SOURCE_SELECTOR, [])
-        ]
-        mutes = [
+    async def async_step_mutes(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle mute block selection."""
+        if user_input is not None:
+            self._selected_mutes = user_input.get(CONF_MUTES, [])
+            return await self.async_step_logic_states()
+
+        available = [
             b["instance_id"] for b in self._discovered_blocks.get(BLOCK_TYPE_MUTE, [])
         ]
-        logic_states = [
+
+        if not available:
+            return await self.async_step_logic_states()
+
+        options = {mid: mid for mid in available}
+
+        return self.async_show_form(
+            step_id="mutes",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_MUTES, default=[]): cv.multi_select(options),
+                }
+            ),
+        )
+
+    async def async_step_logic_states(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle logic state block selection."""
+        if user_input is not None:
+            self._selected_logic_states = user_input.get(CONF_LOGIC_STATES, [])
+            return await self.async_step_logic_meters()
+
+        available = [
             b["instance_id"]
             for b in self._discovered_blocks.get(BLOCK_TYPE_LOGIC_STATE, [])
         ]
-        logic_meters = [
+
+        if not available:
+            return await self.async_step_logic_meters()
+
+        options = {sid: sid for sid in available}
+
+        return self.async_show_form(
+            step_id="logic_states",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_LOGIC_STATES, default=[]): cv.multi_select(
+                        options
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_logic_meters(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle logic meter block selection."""
+        if user_input is not None:
+            self._selected_logic_meters = user_input.get(CONF_LOGIC_METERS, [])
+            return self._create_entry()
+
+        available = [
             b["instance_id"]
             for b in self._discovered_blocks.get(BLOCK_TYPE_LOGIC_METER, [])
         ]
 
+        if not available:
+            return self._create_entry()
+
+        options = {mid: mid for mid in available}
+
+        return self.async_show_form(
+            step_id="logic_meters",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_LOGIC_METERS, default=[]): cv.multi_select(
+                        options
+                    ),
+                }
+            ),
+        )
+
+    def _create_entry(self) -> ConfigFlowResult:
+        """Create the config entry with all selected blocks."""
         options = {
-            CONF_SOURCE_SELECTORS: source_selectors,
-            CONF_MUTES: mutes,
-            CONF_LOGIC_STATES: logic_states,
-            CONF_LOGIC_METERS: logic_meters,
-            CONF_LEVELS: selected_levels,
+            CONF_SOURCE_SELECTORS: self._selected_source_selectors,
+            CONF_MUTES: self._selected_mutes,
+            CONF_LOGIC_STATES: self._selected_logic_states,
+            CONF_LOGIC_METERS: self._selected_logic_meters,
+            CONF_LEVELS: self._selected_levels,
             CONF_ROUTERS: self._router_configs,
         }
 
@@ -279,11 +407,57 @@ class TesiraConfigFlow(ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return TesiraOptionsFlow()
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle reconfiguration of connection details."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            host = user_input[CONF_HOST]
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+
+            try:
+                tesira = Tesira(host, username, password)
+                await tesira.connect_command_only()
+            except Exception:
+                errors["base"] = "cannot_connect"
+            else:
+                await tesira.invalidate_connection()
+
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_HOST: host,
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST, "")): str,
+                    vol.Required(
+                        CONF_USERNAME, default=entry.data.get(CONF_USERNAME, "")
+                    ): str,
+                    vol.Optional(
+                        CONF_PASSWORD, default=entry.data.get(CONF_PASSWORD, "")
+                    ): str,
+                }
+            ),
+            errors=errors,
+        )
+
 
 class TesiraOptionsFlow(OptionsFlow):
     """Handle options flow for Tesira Control.
 
-    Re-discovers blocks and lets the user reconfigure routers and levels.
+    Re-discovers blocks and lets the user reconfigure all block selections.
     """
 
     def __init__(self) -> None:
@@ -296,6 +470,12 @@ class TesiraOptionsFlow(OptionsFlow):
         self._current_output_index: int = 0
         self._current_router_levels: list[str] = []
         self._assigned_levels: set[str] = set()
+        self._selected_source_selectors: list[str] = []
+        self._selected_routers: list[str] = []
+        self._selected_levels: list[str] = []
+        self._selected_mutes: list[str] = []
+        self._selected_logic_states: list[str] = []
+        self._selected_logic_meters: list[str] = []
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -327,10 +507,80 @@ class TesiraOptionsFlow(OptionsFlow):
         self._current_router_index = 0
         self._assigned_levels = set()
 
-        if self._routers:
-            return await self.async_step_router()
+        return await self.async_step_source_selectors()
 
-        return await self.async_step_levels()
+    async def async_step_source_selectors(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle source selector block selection in options."""
+        if user_input is not None:
+            self._selected_source_selectors = user_input.get(CONF_SOURCE_SELECTORS, [])
+            return await self.async_step_select_routers()
+
+        available = [
+            b["instance_id"]
+            for b in self._discovered_blocks.get(BLOCK_TYPE_SOURCE_SELECTOR, [])
+        ]
+
+        if not available:
+            return await self.async_step_select_routers()
+
+        # Pre-select from current config
+        current = self.config_entry.options.get(CONF_SOURCE_SELECTORS, [])
+        defaults = [sid for sid in current if sid in available]
+
+        options = {sid: sid for sid in available}
+
+        return self.async_show_form(
+            step_id="source_selectors",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SOURCE_SELECTORS, default=defaults
+                    ): cv.multi_select(options),
+                }
+            ),
+        )
+
+    async def async_step_select_routers(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle router block selection in options."""
+        if user_input is not None:
+            self._selected_routers = user_input.get(CONF_ROUTERS, [])
+            # Filter routers to only selected ones
+            self._routers = [
+                r for r in self._routers if r["instance_id"] in self._selected_routers
+            ]
+            if self._routers:
+                return await self.async_step_router()
+            return await self.async_step_levels()
+
+        available = [
+            b["instance_id"] for b in self._discovered_blocks.get(BLOCK_TYPE_ROUTER, [])
+        ]
+
+        if not available:
+            return await self.async_step_levels()
+
+        # Pre-select from current config
+        current = [
+            rc[CONF_ROUTER_ID] for rc in self.config_entry.options.get(CONF_ROUTERS, [])
+        ]
+        defaults = [rid for rid in current if rid in available]
+
+        options = {rid: rid for rid in available}
+
+        return self.async_show_form(
+            step_id="select_routers",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_ROUTERS, default=defaults): cv.multi_select(
+                        options
+                    ),
+                }
+            ),
+        )
 
     async def _advance_to_next_router(self) -> ConfigFlowResult:
         """Save current router config and advance to next router or levels."""
@@ -426,15 +676,16 @@ class TesiraOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Handle standalone level block selection in options."""
         if user_input is not None:
-            selected_levels = user_input.get(CONF_LEVELS, [])
-            return self._create_options_entry(selected_levels)
+            self._selected_levels = user_input.get(CONF_LEVELS, [])
+            return await self.async_step_mutes()
 
         available_levels = [
             lid for lid in self._level_blocks if lid not in self._assigned_levels
         ]
 
         if not available_levels:
-            return self._create_options_entry([])
+            self._selected_levels = []
+            return await self.async_step_mutes()
 
         # Pre-select from current config
         current_levels = self.config_entry.options.get(CONF_LEVELS, [])
@@ -453,32 +704,114 @@ class TesiraOptionsFlow(OptionsFlow):
             ),
         )
 
-    def _create_options_entry(self, selected_levels: list[str]) -> ConfigFlowResult:
-        """Create options entry with updated block selections."""
-        source_selectors = [
-            b["instance_id"]
-            for b in self._discovered_blocks.get(BLOCK_TYPE_SOURCE_SELECTOR, [])
-        ]
-        mutes = [
+    async def async_step_mutes(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle mute block selection in options."""
+        if user_input is not None:
+            self._selected_mutes = user_input.get(CONF_MUTES, [])
+            return await self.async_step_logic_states()
+
+        available = [
             b["instance_id"] for b in self._discovered_blocks.get(BLOCK_TYPE_MUTE, [])
         ]
-        logic_states = [
+
+        if not available:
+            return await self.async_step_logic_states()
+
+        # Pre-select from current config
+        current = self.config_entry.options.get(CONF_MUTES, [])
+        defaults = [mid for mid in current if mid in available]
+
+        options = {mid: mid for mid in available}
+
+        return self.async_show_form(
+            step_id="mutes",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_MUTES, default=defaults): cv.multi_select(
+                        options
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_logic_states(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle logic state block selection in options."""
+        if user_input is not None:
+            self._selected_logic_states = user_input.get(CONF_LOGIC_STATES, [])
+            return await self.async_step_logic_meters()
+
+        available = [
             b["instance_id"]
             for b in self._discovered_blocks.get(BLOCK_TYPE_LOGIC_STATE, [])
         ]
-        logic_meters = [
+
+        if not available:
+            return await self.async_step_logic_meters()
+
+        # Pre-select from current config
+        current = self.config_entry.options.get(CONF_LOGIC_STATES, [])
+        defaults = [sid for sid in current if sid in available]
+
+        options = {sid: sid for sid in available}
+
+        return self.async_show_form(
+            step_id="logic_states",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_LOGIC_STATES, default=defaults): cv.multi_select(
+                        options
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_logic_meters(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle logic meter block selection in options."""
+        if user_input is not None:
+            self._selected_logic_meters = user_input.get(CONF_LOGIC_METERS, [])
+            return self._create_options_entry()
+
+        available = [
             b["instance_id"]
             for b in self._discovered_blocks.get(BLOCK_TYPE_LOGIC_METER, [])
         ]
 
+        if not available:
+            return self._create_options_entry()
+
+        # Pre-select from current config
+        current = self.config_entry.options.get(CONF_LOGIC_METERS, [])
+        defaults = [mid for mid in current if mid in available]
+
+        options = {mid: mid for mid in available}
+
+        return self.async_show_form(
+            step_id="logic_meters",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_LOGIC_METERS, default=defaults): cv.multi_select(
+                        options
+                    ),
+                }
+            ),
+        )
+
+    def _create_options_entry(self) -> ConfigFlowResult:
+        """Create options entry with updated block selections."""
         return self.async_create_entry(
             title=self.config_entry.title,
             data={
-                CONF_SOURCE_SELECTORS: source_selectors,
-                CONF_MUTES: mutes,
-                CONF_LOGIC_STATES: logic_states,
-                CONF_LOGIC_METERS: logic_meters,
-                CONF_LEVELS: selected_levels,
+                CONF_SOURCE_SELECTORS: self._selected_source_selectors,
+                CONF_MUTES: self._selected_mutes,
+                CONF_LOGIC_STATES: self._selected_logic_states,
+                CONF_LOGIC_METERS: self._selected_logic_meters,
+                CONF_LEVELS: self._selected_levels,
                 CONF_ROUTERS: self._router_configs,
             },
         )

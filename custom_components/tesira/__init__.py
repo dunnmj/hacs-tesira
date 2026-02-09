@@ -48,8 +48,16 @@ def get_name_from_instance_id(instance_id: str) -> str:
             name = name[: -len(suffix)]
             break
 
-    # Split camelCase into separate words
-    return re.sub(r"(?<=[A-Za-z])(?=[A-Z])", " ", name)
+    # Split camelCase into separate words, keeping consecutive capitals together
+    # and separating digit/letter boundaries
+    return re.sub(
+        r"(?<=[a-z])(?=[A-Z])"
+        r"|(?<=[A-Z])(?=[A-Z][a-z])"
+        r"|(?<=[a-zA-Z])(?=[0-9])"
+        r"|(?<=[0-9])(?=[a-zA-Z])",
+        " ",
+        name,
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: TesiraConfigEntry) -> bool:
