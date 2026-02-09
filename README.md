@@ -257,16 +257,16 @@ You control entity naming by how you name your Tesira blocks.
 Router output entity naming depends on whether a Level block was assigned:
 
 - **With a Level block**: Named after the Level block's instance ID, using the standard naming rules above
-- **Without a Level block**: Named using the router's instance ID (via standard naming rules) combined with the output label fetched from Tesira
+- **Without a Level block**: Named using the router's instance ID (via standard naming rules) combined with the output label fetched from Tesira, separated by `-`
 
 Examples:
 
-| Router Instance ID | Level Block            | Output Label | Entity Name     |
-| ------------------ | ---------------------- | ------------ | --------------- |
-| `Studio - Router`  | `Studio Upper - Level` | —            | `Studio Upper`  |
-| `Studio - Router`  | _(none)_               | `Zone 3`     | `Studio Zone 3` |
-| `ZoneRouter`       | `Zone1Level`           | —            | `Zone 1`        |
-| `ZoneRouter`       | _(none)_               | `Patio`      | `Zone Patio`    |
+| Router Instance ID | Level Block            | Output Label | Entity Name       |
+| ------------------ | ---------------------- | ------------ | ----------------- |
+| `Studio - Router`  | `Studio Upper - Level` | —            | `Studio Upper`    |
+| `Studio - Router`  | _(none)_               | `Zone 3`     | `Studio - Zone 3` |
+| `ZoneRouter`       | `Zone1Level`           | —            | `Zone 1`          |
+| `ZoneRouter`       | _(none)_               | `Patio`      | `Zone - Patio`    |
 
 ### Switch entity names (mute channels)
 

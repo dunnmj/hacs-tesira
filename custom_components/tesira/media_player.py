@@ -92,7 +92,7 @@ async def async_setup_entry(
                         label = await tesira.get_output_label(router_id, output_index)
                     except CommandFailedException:
                         label = f"Output {output_index}"
-                    output_label = f"{get_name_from_instance_id(router_id)} {label}"
+                    output_label = f"{get_name_from_instance_id(router_id)} - {label}"
                 try:
                     entities.append(
                         await TesiraRouterOutput.new(
