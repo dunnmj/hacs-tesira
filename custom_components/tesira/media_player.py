@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_platform
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import TesiraConfigEntry, get_name_from_instance_id
+from . import TesiraConfigEntry, format_source_name, get_name_from_instance_id
 from .const import (
     CONF_LEVEL_BLOCKS,
     CONF_ROUTERS,
@@ -136,8 +136,8 @@ class TesiraSourceSelector(MediaPlayerEntity):
         self._serial = serial_number
         self._instance_id = instance_id
         self._attr_unique_id = f"{serial_number}_{instance_id.replace(' ', '_')}"
-        self._source_map = source_map
-        self._attr_source_list = list(source_map.keys())
+        self._source_map = {format_source_name(k): v for k, v in source_map.items()}
+        self._attr_source_list = list(self._source_map.keys())
         self._attr_source = self._attr_source_list[0]
         self._attr_name = get_name_from_instance_id(instance_id)
 
@@ -237,8 +237,8 @@ class TesiraRouterOutput(MediaPlayerEntity):
                 f"{serial_number}_{router_id.replace(' ', '_')}_output_{output_index}"
             )
             self._attr_supported_features = MediaPlayerEntityFeature.SELECT_SOURCE
-        self._input_map = input_map
-        self._attr_source_list = list(input_map.keys())
+        self._input_map = {format_source_name(k): v for k, v in input_map.items()}
+        self._attr_source_list = list(self._input_map.keys())
         self._attr_source = self._attr_source_list[0]
         self._attr_name = output_label
 
