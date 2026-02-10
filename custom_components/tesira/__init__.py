@@ -39,7 +39,7 @@ BLOCK_TYPE_SUFFIXES = [
 def get_name_from_instance_id(instance_id: str) -> str:
     """Extract a friendly name from a Tesira instance ID."""
     if "-" in instance_id:
-        return instance_id.rsplit("-", 1)[0].strip()
+        return _split_name(instance_id.rsplit("-", 1)[0].strip())
 
     # Strip known block type suffixes
     name = instance_id
@@ -50,6 +50,11 @@ def get_name_from_instance_id(instance_id: str) -> str:
 
     # Split camelCase into separate words, keeping consecutive capitals together
     # and separating digit/letter boundaries
+    return _split_name(name)
+
+
+def _split_name(name: str) -> str:
+    """Split camelCase, consecutive capitals, and digit/letter boundaries."""
     return re.sub(
         r"(?<=[a-z])(?=[A-Z])"
         r"|(?<=[A-Z])(?=[A-Z][a-z])"
@@ -58,6 +63,15 @@ def get_name_from_instance_id(instance_id: str) -> str:
         " ",
         name,
     )
+
+
+def format_source_name(name: str) -> str:
+    """Format a Tesira source or input label for display.
+
+    Replaces underscores with spaces, then splits camelCase,
+    consecutive capitals, and digit/letter boundaries.
+    """
+    return _split_name(name.replace("_", " "))
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: TesiraConfigEntry) -> bool:
