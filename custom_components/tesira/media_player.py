@@ -185,11 +185,15 @@ class TesiraSourceSelector(MediaPlayerEntity):
 
     @staticmethod
     def volume_to_db(volume):
-        return max(30 * (math.log2(max(volume, 0.001))), -100)
+        if volume <= 0:
+            return -100  # Minimum dB value for silence
+        return ((volume * 100) - 1) * (50 / 99) - 40
 
     @staticmethod
     def db_to_volume(db):
-        return math.pow(2, (db / 30))
+        if db <= -40:
+            return 0.0  # Minimum volume for -40 dB or less
+        return ((db + 40) * (99 / 50) + 1) / 100
 
     async def async_set_volume_level(self, volume: float) -> None:
         await self._tesira.set_volume(self._instance_id, self.volume_to_db(volume))
